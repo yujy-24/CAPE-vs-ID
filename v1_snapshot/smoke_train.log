@@ -1,0 +1,54 @@
+=== smoke id 18:59:29 ===
+/home/yjy/miniconda3/envs/lawam/lib/python3.10/site-packages/torch/nn/modules/transformer.py:385: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[id_smoke] trainable 20.1M  | train 7993 / val 991 windows
+Traceback (most recent call last):
+  File "/mnt/e/world_model/id_vs_cape/train.py", line 175, in <module>
+    main()
+  File "/mnt/e/world_model/id_vs_cape/train.py", line 136, in main
+    b = collate(tr, idxs, a.arm)
+  File "/mnt/e/world_model/id_vs_cape/train.py", line 42, in collate
+    p, nx, a = id_pairs_from_window(
+  File "/mnt/e/world_model/id_vs_cape/windows.py", line 53, in id_pairs_from_window
+    return (torch.stack([z[j] for j in js]),
+TypeError: expected Tensor as element 0 in argument 0, but got numpy.ndarray
+=== smoke id 19:00:23 ===
+/home/yjy/miniconda3/envs/lawam/lib/python3.10/site-packages/torch/nn/modules/transformer.py:385: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[id_smoke] trainable 20.1M  | train 7993 / val 991 windows
+Traceback (most recent call last):
+  File "/mnt/e/world_model/id_vs_cape/train.py", line 175, in <module>
+    main()
+  File "/mnt/e/world_model/id_vs_cape/train.py", line 136, in main
+    b = collate(tr, idxs, a.arm)
+  File "/mnt/e/world_model/id_vs_cape/train.py", line 45, in collate
+    prev.append(torch.from_numpy(p)); nxt.append(torch.from_numpy(nx))
+TypeError: expected np.ndarray (got Tensor)
+=== smoke id 19:01:33 ===
+/home/yjy/miniconda3/envs/lawam/lib/python3.10/site-packages/torch/nn/modules/transformer.py:385: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[id_smoke] trainable 20.1M  | train 7993 / val 991 windows
+[id_smoke] done 0.1 min -> /mnt/e/world_model/id_vs_cape/cache/ckpt/id_smoke/final.pt
+=== smoke cape 19:02:18 ===
+/home/yjy/miniconda3/envs/lawam/lib/python3.10/site-packages/torch/nn/modules/transformer.py:385: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[cape_smoke] trainable 25.2M +bridge 0.6M | train 7993 / val 991 windows
+Traceback (most recent call last):
+  File "/mnt/e/world_model/id_vs_cape/train.py", line 175, in <module>
+    main()
+  File "/mnt/e/world_model/id_vs_cape/train.py", line 136, in main
+    b = collate(tr, idxs, a.arm)
+  File "/mnt/e/world_model/id_vs_cape/train.py", line 51, in collate
+    c1, a1, _, _ = ds.branch(i, 1); c2, a2, _, _ = ds.branch(i, 2)
+ValueError: not enough values to unpack (expected 4, got 3)
+=== smoke cape 19:03:32 ===
+/home/yjy/miniconda3/envs/lawam/lib/python3.10/site-packages/torch/nn/modules/transformer.py:385: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[cape_smoke] trainable 25.2M +bridge 0.6M | train 7993 / val 991 windows
+[cape_smoke] done 0.2 min -> /mnt/e/world_model/id_vs_cape/cache/ckpt/cape_smoke/final.pt
+=== smoke fwd 19:04:27 ===
+/home/yjy/miniconda3/envs/lawam/lib/python3.10/site-packages/torch/nn/modules/transformer.py:385: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[fwd_smoke] trainable 25.2M +bridge 0.6M | train 7993 / val 991 windows
+[fwd_smoke] done 0.1 min -> /mnt/e/world_model/id_vs_cape/cache/ckpt/fwd_smoke/final.pt
+=== all smoke done 19:05:13 ===

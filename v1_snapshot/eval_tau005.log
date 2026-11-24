@@ -1,0 +1,17 @@
+  warnings.warn(
+space=cape  pairs: train 79930 / val 9910
+ridge (alpha=100.0) R2 (mean -0.225)  per-dim: 0.010 -0.649 -0.202 -0.317 0.042 -0.216 -0.241
+-> /mnt/e/world_model/id_vs_cape/cache/probe_r2_cape.txt
+  warnings.warn(
+[cape_tau005] Hit@1/5/10 = 0.000 / 0.441 / 1.000  (n=991)
+top-1 type counts: {'swap': 991}
+  warnings.warn(
+A cos(o_T, o_T+1) : mean 0.9765  p5 0.9558  p95 0.9934
+A cos(o_T, o_T+2) : mean 0.9649  p5 0.9368  p95 0.9864
+A cos(o_T, o_T+3) : mean 0.9567  p5 0.9253  p95 0.9840
+A cos(o_T, o_rand)   : mean 0.7292  p5 0.5868  p95 0.8792
+A cos(o_T, o_T'other): mean 0.8524  p5 0.6956  p95 0.9669
+A   rand same-task subset (209): mean 0.8353  p5 0.7436  p95 0.9354
+B cos(u1,u2) same-outcome : mean 1.0000  p5 1.0000  p95 1.0000
+B cos(u1,uswap) diff-acts : mean 1.0000  p5 1.0000  p95 1.0000
+B swap-wins rate (lower=better, 0.5=blind): 0.118
