@@ -1,0 +1,39 @@
+=== EVAL BATTERY start 19:59:04 ===
+/home/yjy/miniconda3/envs/lawam/lib/python3.10/site-packages/torch/nn/modules/transformer.py:385: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+space=id  pairs: train 79930 / val 9910
+IDNet held-out R2 (mean -0.163)  per-dim: -0.075 -0.320 -0.148 -0.126 0.014 -0.279 -0.207
+/home/yjy/miniconda3/envs/lawam/lib/python3.10/site-packages/torch/nn/modules/transformer.py:385: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+space=cape  pairs: train 79930 / val 9910
+ridge (alpha=100.0) R2 (mean -0.128)  per-dim: 0.021 -0.362 -0.179 -0.153 0.063 -0.130 -0.153
+-> /mnt/e/world_model/id_vs_cape/cache/probe_r2_cape.txt
+/home/yjy/miniconda3/envs/lawam/lib/python3.10/site-packages/torch/nn/modules/transformer.py:385: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+space=fwd  pairs: train 79930 / val 9910
+ridge (alpha=100.0) R2 (mean -0.348)  per-dim: -0.038 -1.328 -0.208 -0.528 0.036 -0.403 0.035
+-> /mnt/e/world_model/id_vs_cape/cache/probe_r2_fwd.txt
+/home/yjy/miniconda3/envs/lawam/lib/python3.10/site-packages/torch/nn/modules/transformer.py:385: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[id] Hit@1/5/10 = 0.100 / 0.674 / 1.000  (n=991)
+top-1 type counts: {'true': 99, 'b2': 112, 'rand': 137, 'b4': 123, 'b1': 89, 'tn+1': 89, 'b3': 118, 'b5': 122, 'tn+2': 102}
+/home/yjy/miniconda3/envs/lawam/lib/python3.10/site-packages/torch/nn/modules/transformer.py:385: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[cape] Hit@1/5/10 = 0.000 / 0.454 / 1.000  (n=991)
+top-1 type counts: {'swap': 991}
+/home/yjy/miniconda3/envs/lawam/lib/python3.10/site-packages/torch/nn/modules/transformer.py:385: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[fwd] Hit@1/5/10 = 0.082 / 0.598 / 1.000  (n=991)
+top-1 type counts: {'b1': 115, 'b2': 110, 'b3': 119, 'b4': 108, 'b5': 131, 'rand': 156, 'tn+2': 97, 'true': 81, 'tn+1': 74}
+/home/yjy/miniconda3/envs/lawam/lib/python3.10/site-packages/torch/nn/modules/transformer.py:385: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+A cos(o_T, o_T+1) : mean 0.9765  p5 0.9558  p95 0.9934
+A cos(o_T, o_T+2) : mean 0.9649  p5 0.9368  p95 0.9864
+A cos(o_T, o_T+3) : mean 0.9567  p5 0.9253  p95 0.9840
+A cos(o_T, o_rand)   : mean 0.7292  p5 0.5868  p95 0.8792
+A cos(o_T, o_T'other): mean 0.8524  p5 0.6956  p95 0.9669
+A   rand same-task subset (209): mean 0.8353  p5 0.7436  p95 0.9354
+B cos(u1,u2) same-outcome : mean 1.0000  p5 1.0000  p95 1.0000
+B cos(u1,uswap) diff-acts : mean 1.0000  p5 1.0000  p95 1.0000
+B swap-wins rate (lower=better, 0.5=blind): 0.129
+=== EVAL BATTERY done rc=0 20:04:53 ===

@@ -1,0 +1,13 @@
+/home/yjy/miniconda3/envs/lawam/lib/python3.10/site-packages/torch/nn/modules/transformer.py:385: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[cape_tau005] trainable 25.2M +bridge 0.6M | train 7993 / val 991 windows
+[cape_tau005] step 2000 loss 0.6931 val 0.0000
+[cape_tau005] step 4000 loss 0.6931 val 0.0000
+[cape_tau005] step 6000 loss 0.6931 val 0.0000
+[cape_tau005] step 8000 loss 0.6931 val 0.0000
+[cape_tau005] step 10000 loss 0.6931 val 0.0000
+[cape_tau005] step 12000 loss 0.6931 val 0.0000
+[cape_tau005] step 14000 loss 0.6931 val 0.0000
+[cape_tau005] step 16000 loss 0.6931 val 0.0000
+[cape_tau005] step 18000 loss 0.6931 val 0.0000
+[cape_tau005] done 28.3 min -> /mnt/e/world_model/id_vs_cape/cache/ckpt/cape_tau005/final.pt

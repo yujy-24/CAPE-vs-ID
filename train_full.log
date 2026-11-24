@@ -1,0 +1,43 @@
+=== FULL id start 2026-11-24 19:08:53 ===
+/home/yjy/miniconda3/envs/lawam/lib/python3.10/site-packages/torch/nn/modules/transformer.py:385: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[id] trainable 20.1M  | train 7993 / val 991 windows
+[id] step 2000 loss 0.1566 val 0.2049
+[id] step 4000 loss 0.1781 val 0.1879
+[id] step 6000 loss 0.1165 val 0.1967
+[id] step 8000 loss 0.1110 val 0.2000
+[id] step 10000 loss 0.1107 val 0.1819
+[id] step 12000 loss 0.1113 val 0.1926
+[id] step 14000 loss 0.0788 val 0.1971
+[id] step 16000 loss 0.0690 val 0.1961
+[id] step 18000 loss 0.0593 val 0.1919
+[id] done 5.4 min -> /mnt/e/world_model/id_vs_cape/cache/ckpt/id/final.pt
+=== FULL cape start 2026-11-24 19:15:00 ===
+/home/yjy/miniconda3/envs/lawam/lib/python3.10/site-packages/torch/nn/modules/transformer.py:385: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[cape] trainable 25.2M +bridge 0.6M | train 7993 / val 991 windows
+[cape] step 2000 loss 0.4852 val 0.0000
+[cape] step 4000 loss 0.3572 val 0.0000
+[cape] step 6000 loss 0.6931 val 0.0000
+[cape] step 8000 loss 0.6931 val 0.0000
+[cape] step 10000 loss 0.6931 val 0.0000
+[cape] step 12000 loss 0.6931 val 0.0000
+[cape] step 14000 loss 0.6931 val 0.0000
+[cape] step 16000 loss 0.6931 val 0.0000
+[cape] step 18000 loss 0.6931 val 0.0000
+[cape] done 28.3 min -> /mnt/e/world_model/id_vs_cape/cache/ckpt/cape/final.pt
+=== FULL fwd start 2026-11-24 19:44:59 ===
+/home/yjy/miniconda3/envs/lawam/lib/python3.10/site-packages/torch/nn/modules/transformer.py:385: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[fwd] trainable 25.2M +bridge 0.6M | train 7993 / val 991 windows
+[fwd] step 2000 loss 0.0485 val 0.0944
+[fwd] step 4000 loss 0.0456 val 0.1013
+[fwd] step 6000 loss 0.0370 val 0.0960
+[fwd] step 8000 loss 0.0447 val 0.0943
+[fwd] step 10000 loss 0.0377 val 0.0938
+[fwd] step 12000 loss 0.0393 val 0.0940
+[fwd] step 14000 loss 0.0381 val 0.0941
+[fwd] step 16000 loss 0.0295 val 0.0931
+[fwd] step 18000 loss 0.0284 val 0.0942
+[fwd] done 11.7 min -> /mnt/e/world_model/id_vs_cape/cache/ckpt/fwd/final.pt
+=== ALL FULL TRAINING DONE 2026-11-24 19:58:49 ===

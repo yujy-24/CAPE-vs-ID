@@ -1,0 +1,33 @@
+=== probe_r2 frozen 18:48:43 ===
+space=frozen  pairs: train 111902 / val 13874
+Traceback (most recent call last):
+  File "/mnt/e/world_model/id_vs_cape/probe_r2.py", line 110, in <module>
+    main()
+  File "/mnt/e/world_model/id_vs_cape/probe_r2.py", line 99, in main
+    r2, alpha, mean = ridge_r2(Xtr, Atr, Xva, Ava)
+  File "/mnt/e/world_model/id_vs_cape/probe_r2.py", line 70, in ridge_r2
+    X1.T @ Atr).T
+ValueError: matmul: Input operand 1 has a mismatch in its core dimension 0, with gufunc signature (n?,k),(k,m?)->(n?,m?) (size 79930 is different from 111902)
+=== eval_retrieval frozen 18:50:33 ===
+[frozen] Hit@1/5/10 = 0.513 / 0.991 / 1.000  (n=991)
+top-1 type counts: {'true': 508, 'tn+2': 89, 'tn+1': 169, 'b1': 164, 'b2': 23, 'b3': 15, 'b4': 12, 'b5': 11}
+=== diag_pairwise_cos raw 18:50:43 ===
+A cos(o_T, o_T+1) : mean 0.9765  p5 0.9558  p95 0.9934
+A cos(o_T, o_T+2) : mean 0.9649  p5 0.9368  p95 0.9864
+A cos(o_T, o_T+3) : mean 0.9567  p5 0.9253  p95 0.9840
+A cos(o_T, o_rand)   : mean 0.7292  p5 0.5868  p95 0.8792
+A cos(o_T, o_T'other): mean 0.8524  p5 0.6956  p95 0.9669
+A   rand same-task subset (209): mean 0.8353  p5 0.7436  p95 0.9354
+=== done 18:50:48 ===
+space=frozen  pairs: train 79930 / val 9910
+ridge (alpha=100.0) R2 (mean -0.230)  per-dim: -0.034 -0.549 -0.354 -0.473 -0.023 -0.298 0.117
+-> /mnt/e/world_model/id_vs_cape/cache/probe_r2_frozen.txt
+space=frozen  pairs: train 79930 / val 9910
+ridge (alpha=100.0) R2 (mean -0.290)  per-dim: -0.127 -0.666 -0.439 -0.499 -0.069 -0.379 0.149
+-> /mnt/e/world_model/id_vs_cape/cache/probe_r2_frozen.txt
+[ctrl] train-internal random 90/10: mean R2 0.482 (alpha=100.0)
+       per-dim: 0.529 0.625 0.485 0.324 0.270 0.514 0.630
+[act stats] train std  : 0.3295 0.4058 0.4543 0.0389 0.0613 0.0785 0.4994
+[act stats] train mean : 0.0549 0.1008 -0.1061 -0.0004 0.0027 -0.0015 0.5246
+[act stats] val   mean : 0.0780 0.0400 -0.0988 0.0090 0.0105 -0.0169 0.4801
+[act stats] val   std  : 0.3645 0.3188 0.4354 0.0429 0.0733 0.0774 0.4996

@@ -1,0 +1,6 @@
+# caches & checkpoints (23GB+, rebuildable via build_cache.py)
+cache/
+cache_v2/
+__pycache__/
+*.pyc
+*.pt
