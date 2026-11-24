@@ -27,7 +27,7 @@ import torch.nn.functional as F
 from common import (BS, CKPT_DIR, GROUPS, ID_ACCUM, IDX_T, LR, PAST, PER_GROUP,
                     SEED, STEPS, TAU, WD, append_jsonl, cosine_schedule,
                     n_params, seed_all)
-from losses import fwd_cosine_loss, id_loss, info_nce, info_nce_multi
+from losses import fwd_cosine_loss, id_loss, info_nce
 from modules import CAPEModel, FwdModel, IDNet
 from windows import WindowDataset, id_pairs_from_window, pad_actions
 
@@ -76,33 +76,40 @@ def cape_loss(model, ds, groups, dev, tau):
     # state keys for every window (empty-action encoding, shared space)
     keys = model.encode_state(torch.cat([ctx1, ctx2], 0))       # [2B,256]
     k1, k2 = keys[:B], keys[B:]
-    # v2.1: goal state = zero-horizon sample -> POSITIVE (paper appendix A)
+    # v2.2: goal state = zero-horizon SAMPLE (paper App.A) -> a third branch
+    # converging to the same o_T. Eq (3) is PAIRED: each branch pair gets its
+    # own symmetric InfoNCE with its own numerator. (v2.1's shared-logsumexp
+    # multi-positive saturates -- the u1<->u2 term (cos .87 @ tau .07 = e^12)
+    # dominates the numerator, the goal positive gets ~1e-6 of the softmax
+    # weight: goal_cos stayed -0.06 for 20k steps and retrieval stayed chance.)
     s_T = model.encode_state(
         torch.from_numpy(ds.goal_patch[idxs].astype(np.float32)).to(dev))
+    allkeys = torch.cat([keys, s_T], 0)                          # 3B state-side keys
     negs, swap = [], []
     for lg in local:
         for pos, j in enumerate(lg):
             others = [x for x in lg if x != j]
-            negs.append(torch.cat([k1[others], k2[others]]))    # same-scene keys
-            swap.append(lg[(pos + 1) % len(lg)])                # in-group roll
-    u_sw = model(ctx1, acts2[swap].to(dev))                     # swapped-action outcome
-    K = max(x.shape[0] for x in negs)                            # full groups: 2(S-1)
+            negs.append(torch.cat([k1[others], k2[others], s_T[others]]))
+            swap.append(lg[(pos + 1) % len(lg)])                 # in-group roll
+    u_sw = model(ctx1, acts2[swap].to(dev))                      # swapped-action outcome
+    K = max(x.shape[0] for x in negs)                            # full groups: 3(S-1)
     negs = torch.stack([
         x if x.shape[0] == K else
-        torch.cat([x, keys[torch.randperm(2 * B, device=dev)[:K - x.shape[0]]]])
+        torch.cat([x, allkeys[torch.randperm(3 * B, device=dev)[:K - x.shape[0]]]])
         for x in negs], 0)                                       # [B,K,256]
-    idx_c = torch.stack([torch.randperm(2 * B, device=dev)[:2] for _ in range(B)])
-    cross = keys[idx_c]                                          # [B,2,256] random
+    idx_c = torch.stack([torch.randperm(3 * B, device=dev)[:2] for _ in range(B)])
+    cross = allkeys[idx_c]                                       # [B,2,256] random
     negs = torch.cat([negs, u_sw.unsqueeze(1), cross], 1)        # [B,K,256]
     negs = F.normalize(negs, dim=-1)
-    pos1 = torch.stack([u2, s_T], 1)                             # [B,2,256]
-    pos2 = torch.stack([u1, s_T], 1)
-    loss = 0.5 * (info_nce_multi(u1, pos1, negs, tau)
-                  + info_nce_multi(u2, pos2, negs, tau))
+    l12 = info_nce(u1, u2, negs, tau)                            # branch pair, eq (3)
+    l1g = info_nce(u1, s_T, negs, tau)                           # zero-horizon pairs
+    l2g = info_nce(u2, s_T, negs, tau)
+    loss = (l12 + l1g + l2g) / 3.0
     with torch.no_grad():
         diag = dict(swapwins=float((F.cosine_similarity(
             u1, u_sw, -1) > F.cosine_similarity(u1, u2, -1)).float().mean()),
-                    goal_cos=float(F.cosine_similarity(u1, s_T, -1).mean()))
+                    goal_cos=float(F.cosine_similarity(u1, s_T, -1).mean()),
+                    nce_goal=float((l1g + l2g) / 2))
     return loss, diag
 
 
@@ -224,7 +231,8 @@ def main():
                                        goal_cos=diag["goal_cos"], **cf))
                 print(f"[{name}] step {step} loss {loss.item():.4f} val {vl:.4f} "
                       f"cf {cf['cos_foreign']:.3f}/{cf['cos_random']:.3f} "
-                      f"goal {diag['goal_cos']:.3f} swapwins {diag['swapwins']:.3f}",
+                      f"goal {diag['goal_cos']:.3f} nceg {diag['nce_goal']:.3f} "
+                      f"swapwins {diag['swapwins']:.3f}",
                       flush=True)
             step += 1
     else:

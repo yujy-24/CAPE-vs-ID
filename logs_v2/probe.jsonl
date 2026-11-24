@@ -3,3 +3,7 @@
 {"space": "frozen", "y_shuffle": true, "n_pairs": 9950, "n_train": 25000, "r2_pooled_mean": -0.533, "r2_pooled_std": 0.0843, "r2_dims": [-0.2266, -0.8672, -0.7104, -0.0873, -0.1441, -0.2493, -0.4386], "mae": 0.2573}
 {"space": "cape", "y_shuffle": false, "n_pairs": 9950, "n_train": 25000, "r2_pooled_mean": -0.3348, "r2_pooled_std": 0.0387, "r2_dims": [-0.1036, -1.1721, -0.1106, -0.0615, -0.0005, -0.4281, -0.3124], "mae": 0.2443}
 {"space": "fwd", "y_shuffle": false, "n_pairs": 9950, "n_train": 25000, "r2_pooled_mean": -0.3689, "r2_pooled_std": 0.0558, "r2_dims": [-0.1674, -1.0782, -0.138, -0.1493, -0.0308, -0.4411, -0.3879], "mae": 0.2428}
+seed 0: pooled -0.3772 mae 0.2471
+seed 1: pooled -0.2836 mae 0.2410
+seed 2: pooled -0.3437 mae 0.2448
+{'space': 'cape', 'y_shuffle': False, 'n_pairs': 9950, 'n_train': 25000, 'r2_pooled_mean': -0.3348, 'r2_pooled_std': 0.0387, 'r2_dims': [-0.1036, -1.1721, -0.1106, -0.0615, -0.0005, -0.4281, -0.3124], 'mae': 0.2443}

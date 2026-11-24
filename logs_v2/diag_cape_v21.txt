@@ -1,0 +1,18 @@
+/home/yjy/miniconda3/envs/lawam/lib/python3.10/site-packages/torch/nn/modules/transformer.py:385: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+A[CLS] cos(o_T, o_T+1) : mean 0.9782  p5 0.9564  p95 0.9930
+A[CLS] cos(o_T, o_T+2) : mean 0.9679  p5 0.9433  p95 0.9869
+A[CLS] cos(o_T, o_T+3) : mean 0.9598  p5 0.9284  p95 0.9834
+A[CLS] cos(o_T, o_rand)   : mean 0.7250  p5 0.5866  p95 0.8889
+A[CLS] cos(o_T, o_T'other): mean 0.8557  p5 0.6476  p95 0.9733
+A[pmean] cos(o_T, o_T+1) : mean 0.9940  p5 0.9881  p95 0.9983
+A[pmean] cos(o_T, o_T+2) : mean 0.9910  p5 0.9835  p95 0.9959
+A[pmean] cos(o_T, o_T+3) : mean 0.9891  p5 0.9791  p95 0.9952
+A[pmean] cos(o_T, o_rand)   : mean 0.8530  p5 0.7348  p95 0.9730
+A[pmean] cos(o_T, o_T'other): mean 0.9461  p5 0.7675  p95 0.9927
+B cos(u1,u2) same-outcome     : mean 0.8717  p5 0.5955  p95 0.9842
+B cos(u1,enc(o_T))            : mean -0.0369  p5 -0.1774  p95 0.1065
+B cos(u2,enc(o_T))            : mean -0.0474  p5 -0.1896  p95 0.0798
+B cos(u2,uswap) foreign-acts  : mean 0.0431  p5 -0.3042  p95 0.5615
+B cf cos(u2,u(random acts))   : mean 0.0392  p5 -0.2841  p95 0.4794
+B swap-wins rate (lower better, 0.5=blind): 0.020
