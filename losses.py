@@ -18,6 +18,17 @@ def info_nce(u1, u2, negs, tau=0.1):
     return 0.5 * (l1 + l2)
 
 
+def info_nce_multi(anchor, pos, negs, tau=0.1):
+    """multi-positive InfoNCE (v2.1): anchor [B,D], pos [B,P,D], negs [B,N,D],
+    all normalised. CAPE appendix A: goal state = zero-horizon training sample,
+    so the positive set is {other-branch prediction, enc(o_T)}."""
+    sp = torch.bmm(pos, anchor.unsqueeze(-1)).squeeze(-1) / tau
+    sn = torch.bmm(negs, anchor.unsqueeze(-1)).squeeze(-1) / tau
+    num = torch.logsumexp(sp, dim=1)
+    den = torch.logsumexp(torch.cat([sp, sn], dim=1), dim=1)
+    return -(num - den).mean()
+
+
 def id_loss(a_hat, a, form="l1"):
     return F.l1_loss(a_hat, a) if form == "l1" else F.mse_loss(a_hat, a)
 

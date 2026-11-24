@@ -20,15 +20,17 @@ class WindowDataset(Dataset):
     def __init__(self, split):
         paths = sorted(glob.glob(os.path.join(CACHE, f"{split}_shard_*.npz")))
         assert paths, f"no shards for split={split} under {CACHE}; run build_cache.py first"
-        cp, pl, pm, aw = [], [], [], []
+        cp, pl, pm, aw, gp = [], [], [], [], []
         meta = {k: [] for k in ("ep", "T", "t1", "t2", "task", "rand_ep", "rand_fr")}
         for p in paths:
             z = np.load(p)
             cp.append(z["ctx_patch"]); pl.append(z["pooled"])
             pm.append(z["pmean"]); aw.append(z["act_win"])
+            gp.append(z["goal_patch"])
             for k in meta:
                 meta[k].append(z[k])
         self.ctx_patch = np.concatenate(cp)   # [N,2,196,768] fp16
+        self.goal_patch = np.concatenate(gp)  # [N,196,768] fp16 (v2.1 goal state)
         self.pooled = np.concatenate(pl)      # [N,29,768] fp16 (CLS)
         self.pmean = np.concatenate(pm)       # [N,29,768] fp16 (patch-mean)
         self.act_win = np.concatenate(aw)     # [N,PAST,7] f32, covers [T-PAST..T)

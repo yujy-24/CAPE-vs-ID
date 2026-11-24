@@ -90,7 +90,7 @@ def main():
     for pos, r in df.iterrows():     # df was reset_index'd -> pos == row position
         e, T = int(r["episode"]), int(r["T"])
         need[e].update(range(T - PAST, T + FUTS + 1))
-        pf = {int(r["t1"]), int(r["t2"])}
+        pf = {int(r["t1"]), int(r["t2"]), T}          # T: goal-state patch (v2.1)
         if probe_keep[pos]:
             pf.update(range(T - H, T + 1))          # probe window frames
         need_patch[e].update(pf)
@@ -137,11 +137,13 @@ def main():
             fs = list(range(T - PAST, T + FUTS + 1))
             rk = (int(r["rand_episode"]), int(r["rand_frame"]))
             if (any((e, f) not in feats for f in fs) or rk not in feats
-                    or (e, int(r["t1"])) not in patches or (e, int(r["t2"])) not in patches):
+                    or (e, int(r["t1"])) not in patches or (e, int(r["t2"])) not in patches
+                    or (e, T) not in patches):
                 dropped["n"] += 1
                 continue
             rec = dict(
                 ctx_patch=np.stack([patches[(e, int(r["t1"]))], patches[(e, int(r["t2"]))]]),
+                goal_patch=patches[(e, T)],
                 pooled=np.stack([feats[(e, f)] for f in fs] + [feats[rk]]),
                 pmean=np.stack([pmeans[(e, f)] for f in fs] + [pmeans[rk]]),
                 act_win=acts[e][T - PAST:T],
@@ -216,6 +218,7 @@ def save_shard(recs, shard_id, split):
     out = os.path.join(CACHE, f"{split}_shard_{shard_id:04d}.npz")
     np.savez(out,
              ctx_patch=np.stack([r["ctx_patch"] for r in recs]),
+             goal_patch=np.stack([r["goal_patch"] for r in recs]),
              pooled=np.stack([r["pooled"] for r in recs]),
              pmean=np.stack([r["pmean"] for r in recs]),
              act_win=np.stack([r["act_win"] for r in recs]),

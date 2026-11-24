@@ -27,7 +27,7 @@ import torch.nn.functional as F
 from common import (BS, CKPT_DIR, GROUPS, ID_ACCUM, IDX_T, LR, PAST, PER_GROUP,
                     SEED, STEPS, TAU, WD, append_jsonl, cosine_schedule,
                     n_params, seed_all)
-from losses import fwd_cosine_loss, id_loss, info_nce
+from losses import fwd_cosine_loss, id_loss, info_nce, info_nce_multi
 from modules import CAPEModel, FwdModel, IDNet
 from windows import WindowDataset, id_pairs_from_window, pad_actions
 
@@ -76,6 +76,9 @@ def cape_loss(model, ds, groups, dev, tau):
     # state keys for every window (empty-action encoding, shared space)
     keys = model.encode_state(torch.cat([ctx1, ctx2], 0))       # [2B,256]
     k1, k2 = keys[:B], keys[B:]
+    # v2.1: goal state = zero-horizon sample -> POSITIVE (paper appendix A)
+    s_T = model.encode_state(
+        torch.from_numpy(ds.goal_patch[idxs].astype(np.float32)).to(dev))
     negs, swap = [], []
     for lg in local:
         for pos, j in enumerate(lg):
@@ -92,10 +95,14 @@ def cape_loss(model, ds, groups, dev, tau):
     cross = keys[idx_c]                                          # [B,2,256] random
     negs = torch.cat([negs, u_sw.unsqueeze(1), cross], 1)        # [B,K,256]
     negs = F.normalize(negs, dim=-1)
-    loss = info_nce(u1, u2, negs, tau)
+    pos1 = torch.stack([u2, s_T], 1)                             # [B,2,256]
+    pos2 = torch.stack([u1, s_T], 1)
+    loss = 0.5 * (info_nce_multi(u1, pos1, negs, tau)
+                  + info_nce_multi(u2, pos2, negs, tau))
     with torch.no_grad():
         diag = dict(swapwins=float((F.cosine_similarity(
-            u1, u_sw, -1) > F.cosine_similarity(u1, u2, -1)).float().mean()))
+            u1, u_sw, -1) > F.cosine_similarity(u1, u2, -1)).float().mean()),
+                    goal_cos=float(F.cosine_similarity(u1, s_T, -1).mean()))
     return loss, diag
 
 
@@ -213,10 +220,12 @@ def main():
                 vl = validate(model, va, a.arm, dev, a.form, a.bs, a.tau)
                 cf = cape_counterfactual(model, va, dev)
                 append_jsonl(log, dict(step=step, val_loss=round(vl, 5),
-                                       swapwins=diag["swapwins"], **cf))
+                                       swapwins=diag["swapwins"],
+                                       goal_cos=diag["goal_cos"], **cf))
                 print(f"[{name}] step {step} loss {loss.item():.4f} val {vl:.4f} "
                       f"cf {cf['cos_foreign']:.3f}/{cf['cos_random']:.3f} "
-                      f"swapwins {diag['swapwins']:.3f}", flush=True)
+                      f"goal {diag['goal_cos']:.3f} swapwins {diag['swapwins']:.3f}",
+                      flush=True)
             step += 1
     else:
         while step < a.steps:

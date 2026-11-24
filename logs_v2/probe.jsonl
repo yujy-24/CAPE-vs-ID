@@ -1,0 +1,5 @@
+{"space": "frozen", "y_shuffle": false, "n_pairs": 9950, "n_train": 25000, "r2_pooled_mean": -0.7116, "r2_pooled_std": 0.069, "r2_dims": [-0.2508, -1.3648, -0.4471, -0.2522, -0.1967, -0.1517, -0.9435], "mae": 0.2677}
+{"space": "id_direct", "y_shuffle": false, "n_pairs": 9950, "r2_dims": [-0.087, -0.1349, 0.1609, -0.1004, -0.2309, -0.0608, -0.0466], "r2_pooled": -0.0087, "mae": 0.1984}
+{"space": "frozen", "y_shuffle": true, "n_pairs": 9950, "n_train": 25000, "r2_pooled_mean": -0.533, "r2_pooled_std": 0.0843, "r2_dims": [-0.2266, -0.8672, -0.7104, -0.0873, -0.1441, -0.2493, -0.4386], "mae": 0.2573}
+{"space": "cape", "y_shuffle": false, "n_pairs": 9950, "n_train": 25000, "r2_pooled_mean": -0.3348, "r2_pooled_std": 0.0387, "r2_dims": [-0.1036, -1.1721, -0.1106, -0.0615, -0.0005, -0.4281, -0.3124], "mae": 0.2443}
+{"space": "fwd", "y_shuffle": false, "n_pairs": 9950, "n_train": 25000, "r2_pooled_mean": -0.3689, "r2_pooled_std": 0.0558, "r2_dims": [-0.1674, -1.0782, -0.138, -0.1493, -0.0308, -0.4411, -0.3879], "mae": 0.2428}

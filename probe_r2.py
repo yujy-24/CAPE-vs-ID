@@ -163,8 +163,8 @@ def main():
     Xtr, ytr = pair_xy(Ztr, rtr, ds_tr)
     Xva, yva = pair_xy(Zva, rva, ds_val)
     if a.y_shuffle:
-        ytr = y_shuffle_blocks(ytr, Z["train"][1], ds_tr.meta["task"], 0)
-        yva = y_shuffle_blocks(yva, Zv["val"][1], ds_val.meta["task"], 1)
+        ytr = y_shuffle_blocks(ytr, rtr, ds_tr.meta["task"], 0)
+        yva = y_shuffle_blocks(yva, rva, ds_val.meta["task"], 1)
 
     res = []
     for sd in range(a.seeds):

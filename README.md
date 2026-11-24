@@ -70,5 +70,8 @@ bash run_all.sh eval       # 全套指标电池
 - [x] 论文协议审计 + v2 修正案预登记（设计文档 §11）
 - [x] v2 代码全套（11 文件过编译+自检；DIM/IMG 漏定义、df.T 两处即修）
 - [x] manifest v2（8988 窗；ctx 间隔中位 9 帧=0.45s）
-- [ ] cache_v2 构建（后台进行中，日志 `cache_v2/build_cache.log`）
-- [ ] 三臂×2 种子训练 + controls → eval 全电池 → 主表 v2 + H1/H2/H3 判读
+- [x] cache_v2 构建（三次启动：VM 崩溃→OOM 定位 patch 攒积 13.6GB→逐集释放修复→**dropped 0**，17GB，~15 分钟）
+- [x] **v2.0 主力（seed 42）三臂完成 + 主表**（实验记录·十）：坍缩逃逸成立（cos_random 1.0→0.02）；检索层爆冷（cape Hit@1=0.000=随机）→ 根因=正对缺目标状态（附录 A "zero-horizon training samples"）→ **v2.1 修正案预登记（§12）**：多正对 InfoNCE，cache 增存 o_T patch
+- [ ] v2.1：cache 重建 + cape_v21 重训（后台进行中，监控 goal_cos）
+- [ ] 剩余队列（被内存压力中止，待重启）：id_seed43、cape/fwd_seed43（cape 用 v2.1 协议）、id_shuf、id_l1
+- [ ] eval 全电池终版 → 主表 v2.1 + H1/H2/H3 判读
