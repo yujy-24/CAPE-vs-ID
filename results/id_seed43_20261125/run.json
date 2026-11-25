@@ -1,0 +1,51 @@
+{
+  "run_id": "id_seed43_20261125_remote",
+  "status": "completed",
+  "comparison_status": "provisional_encoder_checksum_mismatch",
+  "started_at": "2026-11-25T17:02:27+08:00",
+  "training_completed_at": "2026-11-25T17:08:44+08:00",
+  "evaluation_completed_at": "2026-11-25T17:09:12+08:00",
+  "source_commit": "a46f93be98064ac39d8b3cd3f0ebb72ced17d9c4",
+  "arm": "id",
+  "seed": 43,
+  "steps": 20000,
+  "loss_form": "l2",
+  "action_labels_shuffled": false,
+  "hardware": {
+    "gpu": "NVIDIA GeForce RTX 4090",
+    "gpu_memory_reported_mib": 23028,
+    "container_memory_limit_bytes": 64424509440
+  },
+  "software": {
+    "python": "3.12.3",
+    "torch": "2.7.0a0+7c8ec84dab.nv25.03",
+    "transformers": "5.2.0"
+  },
+  "inputs": {
+    "dataset": "jialei02/libero_merged_no_noops_20hz",
+    "dataset_revision": "4c6d69d80f038abeb4fe7ba5e350f4d2272343c2",
+    "encoder": "facebook/dinov3-vitb16-pretrain-lvd1689m",
+    "encoder_download_source": "ModelScope",
+    "encoder_size_bytes": 342662192,
+    "encoder_sha256_matches_hugging_face_main": false,
+    "cache": "cache_v3",
+    "train_windows": 7993,
+    "validation_windows": 995,
+    "dropped_windows": 0
+  },
+  "checkpoint": {
+    "server_path": "/root/shared-nvme/CAPE-vs-ID/cache_v3/ckpt/id_seed43/final.pt",
+    "size_bytes": 80401406,
+    "sha256_record": "checksums.sha256",
+    "tracked_in_git": false
+  },
+  "evaluation": {
+    "protocol": "id_direct on held-out tasks",
+    "n_action_pairs": 9950,
+    "pooled_r2": -0.0404,
+    "r2_by_action_dimension": [-0.1514, -0.193, 0.1279, -0.2113, -0.0887, -0.039, -0.0532],
+    "mae": 0.2033,
+    "last_recorded_validation_loss": 0.10544,
+    "last_recorded_validation_step": 18000
+  }
+}

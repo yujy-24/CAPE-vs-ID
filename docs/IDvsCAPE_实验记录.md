@@ -278,5 +278,15 @@
 
 **分工与缓存口径确认（2026-11-25，致合作者）**：
 - 分工：id_seed43 → id_shuf → id_l1 由合作者认领（命令即 `python train.py --arm id --seed 43 --tag _seed43`，从头跑，代码只存 final.pt）；我方负责 v2.3 cape 全量重训（进行中）+ 训后评测主表。任何一方动队列前先 `git fetch` 对表，避免重复。
-- **seed 42（cache_v2 训）与 seed 43（cache_v3 训）同口径**，证据链：①cache_v3 用未改动的 manifest 重建，窗口集与 v2 完全一致（7993/995、dropped 0，构建日志）；②id/fwd 臂训练根本不读 branch_patch（id 用 pmean/act_win，fwd 用 pooled/ctx），v2→v3 对它们只是存储布局变化（branch sidecar mmap）；③seed 42 的 id/fwd final.pt 已复制到 `cache_v3/ckpt/{id,fwd}/`，与 v2.3 评测脚本读取路径对齐。汇总两种子无需任何换算。
+- **原计划的 seed 42（cache_v2 训）与 seed 43（cache_v3 训）同口径，仅指采样及代码协议**：①cache_v3 用未改动的 manifest 重建，窗口集与 v2 完全一致（7993/995、dropped 0，构建日志）；②id/fwd 臂训练不读 branch_patch（id 用 pmean/act_win，fwd 用 pooled/ctx），v2→v3 对它们只是存储布局变化；③seed 42 的 id/fwd final.pt 已复制到 `cache_v3/ckpt/{id,fwd}/`。跨机器重建时仍须核对 DINO 权重或特征哈希，详见第十三节。
 - 若在本机跑：4070 正被 cape 重训占用（预计 ~2h 后空出），请错峰；若在自有环境跑：缓存不入 git，需先 `build_cache.py` + `extract_branch_npy.py`（README 已注明）。
+
+## 十三、2026-11-25 ID seed 43 云端训练与评估
+
+**事件记录**：17:02:27（UTC+8）启动 `train.py --arm id --seed 43 --tag _seed43`；17:08:44 训练 20,000 步完成并写出 `final.pt`；17:09:12 完成 `probe_r2.py --space id_direct` 评估。开始、完成及评估三项事件也写入 [`RUN_LEDGER.md`](RUN_LEDGER.md)。本次仅执行 ID 臂，源码提交为 `a46f93be98064ac39d8b3cd3f0ebb72ced17d9c4`。
+
+**环境与输入**：单张 RTX 4090（运行时报告 23,028 MiB 显存）、60 GiB 容器内存；Python 3.12.3、PyTorch `2.7.0a0+7c8ec84dab.nv25.03`。新实例共享盘为空，故从公开 `jialei02/libero_merged_no_noops_20hz` 数据集和 DINOv3 ViT-B/16 权重重新构建 `cache_v3`；manifest 为训练 7,993／验证 995 窗口，缓存构建丢弃 0。缓存分片保存在共享盘，`branch_*.npy` 旁路文件因共享盘容量限制放在实例系统盘，并以符号链接接入加载器。
+
+**训练及留出任务结果**：L2 逆动力学，batch 8、累积 2、20,000 步，训练耗时约 6.3 分钟；最后记录的验证损失为 step 18,000 的 `0.10544`。ID 原生预测头在 9,950 个验证动作对上得到汇总 R² `-0.0404`、MAE `0.2033`，逐维 R² 为 `[-0.1514, -0.1930, 0.1279, -0.2113, -0.0887, -0.0390, -0.0532]`。原始配置、逐步指标、训练日志、评估日志、缓存摘要及校验和均在 [`results/id_seed43_20261125/`](../results/id_seed43_20261125/)；二进制检查点保存在服务器共享盘，未加入 Git。
+
+**跨种子比较限制**：该次权重从 ModelScope 获取，文件大小与仓库骨干前向形状检查均通过，但其 SHA-256 与 Hugging Face 官方同名 DINOv3 权重的 `main` 版本不一致。虽然 manifest 的窗口数量与原记录相同，目前仍不能断定该次编码特征与 seed 42 一致；在核对 seed 42 实际权重哈希或特征缓存之前，将 seed 43 结果标为“训练完成、跨种子比较待确认”。后续队列仍为 `id_shuf → id_l1`。

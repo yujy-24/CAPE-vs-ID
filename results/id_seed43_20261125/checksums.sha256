@@ -1,0 +1,3 @@
+a4c9d7470ae500701003a30b592c09a658514b2b8248d2dec8bc7810a883b127  cache_v3/ckpt/id_seed43/final.pt
+358078aa475d4bfb61c3df81c8302df34c5a86ee529639e86f7e8c55e3371e4f  cache_v3/manifest.parquet
+9a21ac3df0c63839d62612dda6f454d816c25611cc7a52966ed5a5a94921dc8b  /root/shared-nvme/inputs/dinov3-vitb16-pretrain-lvd1689m/model.safetensors

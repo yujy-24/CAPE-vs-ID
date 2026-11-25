@@ -22,6 +22,8 @@ bash run_all.sh eval       # 全套指标电池
 缓存落在 `E:\world_model\id_vs_cape\cache_v3\`（~33GB，含 v2.3 branch sidecar `branch_{split}.npy`；cache_v2 ~17GB 保留）。缓存不入 git：新环境需先跑 `build_cache.py` + `extract_branch_npy.py`（原始数据 + DINOv3 权重）。
 **长任务必须用 Claude Code 后台任务跑**：WSL 内 `nohup ... &` 随 wsl.exe 会话退出即死。
 
+跨机器运行状态见 [`docs/RUN_LEDGER.md`](docs/RUN_LEDGER.md)；已完成的 ID seed 43 原始日志、配置和指标见 [`results/id_seed43_20261125/`](results/id_seed43_20261125/)。记录开始与结束是两次独立事件，完成后再附评估和检查点校验信息。
+
 ## v2 协议要点（对论文的忠实实现，防 v1 塌缩重演）
 
 - 分支按 CAPE：t2=T−U[5,12]、t1=t2−U[5,12]（不同剩余动作长度汇于同一 o_T；v1 间隔仅 3 帧=坍缩根源）
@@ -75,5 +77,6 @@ bash run_all.sh eval       # 全套指标电池
 - [x] **v2.1 判决：修正无效**（实验记录·十一）：检索仍随机（Hit@1 0.008/MRR 0.028）、探针 −0.335 分毫不动、goal_cos 全程不爬——**logsumexp 正对集饱和**（u1↔u2 的 e^12 压 s_T 的 e^−0.6，权重比 10⁻⁶，目标正对零梯度）。回读原文：零视野样本应是**独立第三分支**（式 3 成对形式，每对独立分子）→ **v2.2 修正案预登记（§13）**：三分支逐对对称 InfoNCE + s_T 入负键池；代码已落地+冒烟通过，重训待指令（含预登记终止判据：goal_cos<0.2 或检索仍随机 ⇒ 停止 Cape 实现迭代，主线按 ID 探针对比收口）
 - [x] **v2.3 官方代码移植**（实验记录·十二、设计文档 §14）：官方仓库 chen2151643/CAPE 逐行对齐——50% 随机 anchor 配对、分支=anchor−i×stride4（i≤5）、整批负池+derangement 换动作、valid_len−1 gather、warmup 5%；branch_patch mmap sidecar 修 WSL OOM；冒烟+机制监控全绿（state_frac≈0.5）
 - [ ] **进行中：v2.3 cape 全量重训**（20k 步 seed 42；中期 goal_cos 0.83、swapwins 0.04）
-- [ ] 分工队列：**id_seed43 → id_shuf → id_l1（合作者认领）**；cape/fwd_seed43 待 v2.3 主表后议（协议以 v2.3 为准，README 旧"v2.2 协议"注记作废）
+- [x] **id_seed43 云端训练与评估完成**（20k 步；留出任务 ID 直读 R² −0.0404、MAE 0.2033）。该次 DINOv3 权重哈希与 Hugging Face 官方同名文件不一致，跨种子汇总前需确认编码器一致性；详见运行记录。
+- [ ] 分工队列：**id_shuf → id_l1（合作者认领）**；cape/fwd_seed43 待 v2.3 主表后议（协议以 v2.3 为准，README 旧"v2.2 协议"注记作废）
 - [ ] eval 全电池终版 → 主表 v2.3 + H1/H2/H3 判读

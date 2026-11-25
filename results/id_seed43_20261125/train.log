@@ -1,0 +1,13 @@
+/usr/local/lib/python3.12/dist-packages/torch/nn/modules/transformer.py:382: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(
+[id_seed43] trainable 20.1M | train 7993 / val 995 windows
+[id_seed43] step 2000 loss 0.0205 val 0.1291
+[id_seed43] step 4000 loss 0.0443 val 0.1080
+[id_seed43] step 6000 loss 0.0317 val 0.1094
+[id_seed43] step 8000 loss 0.0229 val 0.1150
+[id_seed43] step 10000 loss 0.0223 val 0.1000
+[id_seed43] step 12000 loss 0.0176 val 0.1091
+[id_seed43] step 14000 loss 0.0210 val 0.1068
+[id_seed43] step 16000 loss 0.0132 val 0.1041
+[id_seed43] step 18000 loss 0.0084 val 0.1054
+[id_seed43] done 6.3 min -> /root/shared-nvme/CAPE-vs-ID/cache_v3/ckpt/id_seed43/final.pt

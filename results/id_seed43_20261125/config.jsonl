@@ -1,0 +1,1 @@
+{"arm": "id", "steps": 20000, "bs": 8, "lr": 0.0001, "wd": 0.0001, "tau": 0.07, "form": "l2", "shuffle_labels": false, "seed": 43, "tag": "_seed43"}
