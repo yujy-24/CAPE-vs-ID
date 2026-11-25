@@ -270,3 +270,8 @@
 - cache_v3 构建两段完成（首跑被 Claude Code 内存压力回收器终止于 13/16 片，非构建错误；整跑重Build）：**train 16+val 2 分片、7993/995 窗口、dropped 0、BUILD_EXIT=0**，窗口集与 cache_v2 完全一致（manifest 未动）。
 - **内存坑**：branch_patch 留在 npz 内被 WindowDataset 物化 ⇒ ~24GB 常驻爆 15GiB WSL VM（冒烟首跑 OSError Errno 12）。修复：新增 `extract_branch_npy.py` 抽出每 split 单文件 `branch_{split}.npy`，WindowDataset 改 `mmap_mode='r'` 挂载（调用点零改动，常驻回到 v2 的 ~9.3GB）。run_all.sh cache 阶段已挂抽取步骤；.gitignore 补 cache_v3/。
 - **30 步冒烟（tag _smoke，0.3min）+ no_grad 监控验证（`smoke_diag_v23.py`）**：train loss 2.06 / val 1.78（随机基线 ln95≈4.55）；**state_frac 0.454≈0.5**（官方 50% anchor 配对机制确认，160 样本噪声内）；**swapwins 0.137≪0.5**（swap 负样本被分离）；cf 排序正确：own 0.811 > foreign 0.713 ≈ random 0.749。v2.3 机制端到端验证通过，全量重训（20k 步，~160min）待用户 GPU 指令。
+
+**v2.3 全量重训进行中（2026-11-25 晚启动，中期进度供参考）**：
+- 运行：`train.py --arm cape` 20k 步（seed 42，官方超参），~1.45 步/s，GPU 99%/4.7GB，日志 `cache_v3/ckpt/cape_train.log`（不入 git）。
+- 中期监控（step 4000→6000）：val 0.797→0.644；**goal_cos 0.842→0.831**（v2.0/v2.1 该通道为 −0.04 的死区，现已接通，远高于 0.2 终止线）；**swapwins 0.033→0.038**（swap 负样本强分离）；cf foreign/random 0.43/0.43→0.31/0.27（own≫wrong 排序正确）；state_frac 批内波动属 50% anchor 抽样噪声。
+- 判读（中期、非结论）：预登记两终止条件（goal_cos<0.2 / 检索随机）均远离；主表判定仍以训后 eval_retrieval（四臂同协议）为准。训完补全条目 + v2.3 主表。
