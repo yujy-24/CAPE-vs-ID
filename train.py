@@ -59,7 +59,7 @@ def collate_id(ds, idxs, rng, shuffle_map=None):
     return (torch.cat(prev), torch.cat(nxt), torch.cat(act))
 
 
-def cape_loss(model, ds, groups, dev, tau, rng):
+def cape_loss(model, ds, groups, dev, tau, rng, use_swap=True):
     """v2.3 (design doc §14): line-by-line port of the OFFICIAL
     compute_contrastive_loss (single-GPU global mode, use_group_local_state_nce
     =False, use_action_swap=True) on our grouped batches.
@@ -102,20 +102,30 @@ def cape_loss(model, ds, groups, dev, tau, rng):
 
     # swapped-action outcomes: derangement over the whole query batch, each
     # row keeps its OWN context but executes another query's action sequence.
+    # H3-cape control (--no-swap): drop them from the LOSS (official
+    # use_action_swap=False); kept no_grad for the swapwins monitor only.
     ar = np.arange(B)
     while True:
         perm = rng.permutation(B)
         if not (perm == ar).any():
             break
-    u_sw = model(ctx_q, acts_q[perm].to(dev), len_q[perm].to(dev))
+    if use_swap:
+        u_sw = model(ctx_q, acts_q[perm].to(dev), len_q[perm].to(dev))
+    else:
+        with torch.no_grad():
+            u_sw = model(ctx_q, acts_q[perm].to(dev), len_q[perm].to(dev))
 
     logits_q = u_q @ K.T / tau                        # diag = positives
-    logits_q_sw = u_q @ u_sw.T / tau                  # swap negatives (extra cols)
     logits_k = K @ u_q.T / tau
-    logits_k_sw = K @ u_sw.T / tau
     labels = torch.arange(B, device=dev)
-    loss = 0.5 * (F.cross_entropy(torch.cat([logits_q, logits_q_sw], 1), labels)
-                  + F.cross_entropy(torch.cat([logits_k, logits_k_sw], 1), labels))
+    if use_swap:
+        logits_q_sw = u_q @ u_sw.T / tau              # swap negatives (extra cols)
+        logits_k_sw = K @ u_sw.T / tau
+        loss = 0.5 * (F.cross_entropy(torch.cat([logits_q, logits_q_sw], 1), labels)
+                      + F.cross_entropy(torch.cat([logits_k, logits_k_sw], 1), labels))
+    else:
+        loss = 0.5 * (F.cross_entropy(logits_q, labels)
+                      + F.cross_entropy(logits_k, labels))
 
     with torch.no_grad():
         s_T = model.encode_state(
@@ -156,7 +166,7 @@ def cape_counterfactual(model, ds, dev, n=64):
 
 
 @torch.no_grad()
-def validate(model, ds, arm, dev, form, bs, tau=TAU):
+def validate(model, ds, arm, dev, form, bs, tau=TAU, use_swap=True):
     model.eval()
     tot, n = 0.0, 0
     rng = np.random.default_rng(0)
@@ -178,7 +188,7 @@ def validate(model, ds, arm, dev, form, bs, tau=TAU):
     else:
         gen = group_batches(ds, rng, groups=4)
         for _ in range(16):
-            loss, _ = cape_loss(model, ds, next(gen), dev, tau, rng)
+            loss, _ = cape_loss(model, ds, next(gen), dev, tau, rng, use_swap)
             tot += loss.item(); n += 1
     model.train()
     return tot / max(1, n)
@@ -193,6 +203,9 @@ def main():
     ap.add_argument("--wd", type=float, default=WD)
     ap.add_argument("--tau", type=float, default=TAU)
     ap.add_argument("--form", choices=["l1", "l2"], default="l2")
+    ap.add_argument("--no-swap", action="store_true",
+                    help="H3-cape control: drop swapped-action negatives from "
+                         "the loss (official use_action_swap=False)")
     ap.add_argument("--shuffle-labels", action="store_true",
                     help="H3 control: within-task action permutation (42 App.M)")
     ap.add_argument("--seed", type=int, default=SEED)
@@ -237,7 +250,8 @@ def main():
                 # v2.3: official warmup = 5% of total steps (train.py:236)
                 gp["lr"] = a.lr * cosine_schedule(
                     step, a.steps, warmup=max(1, a.steps // 20))
-            loss, diag = cape_loss(model, tr, groups, dev, a.tau, rng)
+            loss, diag = cape_loss(model, tr, groups, dev, a.tau, rng,
+                                   use_swap=not a.no_swap)
             opt.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -245,7 +259,8 @@ def main():
             if step % 100 == 0:
                 append_jsonl(log, dict(step=step, loss=round(float(loss.item()), 5)))
             if step and step % 2000 == 0:
-                vl = validate(model, va, a.arm, dev, a.form, a.bs, a.tau)
+                vl = validate(model, va, a.arm, dev, a.form, a.bs, a.tau,
+                              use_swap=not a.no_swap)
                 cf = cape_counterfactual(model, va, dev)
                 append_jsonl(log, dict(step=step, val_loss=round(vl, 5),
                                        swapwins=diag["swapwins"],
