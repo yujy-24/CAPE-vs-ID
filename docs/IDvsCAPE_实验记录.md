@@ -213,3 +213,39 @@
 **v2.1 执行**：cache 重建 + cape_v21 重训（后台 bfrusxg3f，监控新增 goal_cos 读数：u→enc(o_T) 余弦应从 −0.05 起爬升）。
 
 
+
+## 十一、2026-11-25 v2.1 判决：修正无效——logsumexp 正对集饱和（数学性死锁）；v2.2 预登记
+
+**v2.1 结果（cape_v21，178.5 min，seed 42）**：
+
+| 指标 | v2.0 | v2.1 | 判读 |
+|---|---|---|---|
+| 检索 Hit@1 | 0.000 | 0.008 | 仍≈随机（chance≈0.004） |
+| 检索 MRR | 0.021 | 0.0284 | 仍≈随机（期望 0.022） |
+| 探针 R² | −0.335 | −0.335 | **分毫未动** |
+| cos(u1,enc(o_T)) | −0.047 | −0.037 | 仍正交 |
+| 训练 goal_cos | —（无此项） | −0.12→−0.06 全程不爬 | 监控实锤 |
+| cos(u1,u2) / swap-wins | 0.863 / ≈0 | 0.872 / 0.020 | 坍缩逃逸保持 |
+
+**根因（数学，非超参）**：多正对 logsumexp 分子里 u1↔u2 项 cos 0.87 @ τ=0.07 → e^12.4≈2×10⁵，s_T 项 cos −0.04 → e^−0.6≈0.55；softmax 权重比≈10⁻⁶ ⇒ **目标状态正对的梯度≈0**。loss 早已被 u1↔u2 满足，s_T 永不被拉。探针 R² 分毫不动即是旁证：v2.1 网络与 v2.0 实质等价。错在把附录 A "zero-horizon training samples" 读成"塞进正对集"。
+
+**回读原文（附录 A + 正文式 3）**：式 (3) 是**成对**形式（正对 (u1,u2)，各自独立分子+对称项）；"zero-horizon training samples where the action sequence length is zero" 是**批次中的独立训练样本**（第三条汇于同一 o_T 的分支），与其他分支**成对**出入式 (3)——每对一个独立分子，梯度不饱和。另：批次里其他窗口的 s_T 亦应在负键池中（训练样本全体互为负例）。
+
+**v2.2 修正案（先于任何 v2.2 数字预登记，设计文档 §13）**：
+- 损失 = 三分支 {u1, u2, s_T} 逐对对称 InfoNCE 取均值：(u1,u2)+(u1,s_T)+(u2,s_T)，每对独立分子（式 3 原形）；
+- 负键池从 {k1,k2} 扩为 {k1, k2, s_T}（他窗），换动作+跨批随机不变；
+- 监控增 nce_goal（(u1,s_T)与(u2,s_T) 两项均值，应显著下降）+ goal_cos（应爬升过 0）；
+- id/fwd 不受影响无需重训；cache 无变化无需重建。
+- 预登记判据：若 20k 步后 goal_cos 仍 <0.2 或检索仍随机 → 判"本数据规模/池结构下 CAPE 检索优势不可复现"，按预登记主线（42 号 ID 探针对比）收口，不再迭代 Cape 实现细节。
+
+**执行**：v2.2 代码落地（train.py cape_loss 重写，冒烟 250 步 2.0min 通过，loss 8.45→1.58 有限）；**重训（约 160min）待用户指令**（按 GPU 占用约定）。v2.1 结果与 v2.2 代码已推 git。
+
+**重训前原文复核（11-25，用户指令"再次根据原文确认机制"）——五项全部核对原文原文文字**：
+
+1. **式 (3) 成对形式**（正文第 3.2 节逐字）：分子只有 exp(s(u⁽¹⁾,u⁽²⁾)/τ) 单正对 + 对称项（"with a symmetric term obtained by swapping the two branches"）。**全文不存在多正对 logsumexp**——v2.1 的共享分子形式系我的发明（§12 已如实登记为读法错误）。
+2. **零视野样本=独立训练样本**（附录 A 逐字）："We use this empty-action state encoding for candidate-key encoding in retrieval, goal-state encoding in planning, and **zero-horizon training samples where the action sequence length is zero**"——空动作查询为可学习参数（"learnable empty-action query"），样本走同一通路。Table 5（训练超参全表：AdamW/1e-4/cosine/batch 2048/每组 16 样本/τ=0.07/H=5）**未给零视野样本出现比率**；正文偏移 "choose two offsets k1 and k2" 亦无范围。⇒ 配对比率是原文未定细节；v2.2 取确定性三分支实现（每窗三对全训），两种读法（第三分支 vs 偶发替换某分支）的公共核心一致：目标状态以独立样本身份、**成对、满梯度**参与——此核心由 1+2 联合锁定，登记为"残留歧义"而非偏离。
+3. **负集构成**（正文逐字）："temporal neighbors from nearby but distinct future time steps, outcomes produced by swapped or mismatched action sequences, and randomly sampled states from other trajectories"——三分结构与 v2.2 一致（他窗 s_T 入池=批次训练样本全体互为负例）；T±1..3 精确邻近负例仍以组内他窗键近似（残留偏离，局限节报告）。
+4. **检索协议 C.1**（附录逐字）：query 由"action query conditioned on the visual context token"解码、candidate keys 用空动作查询、余弦相似度、同任务全帧池（论文 ~420 候选 vs 本实现 ~250）——与 eval_retrieval 一致。
+5. **消融表交叉佐证**：Action-Visual Alignment（"directly aligning the predictive future state with future observation"，即纯 (u,enc(o_T)) 对齐）检索 Hit@5 达全模型 84~91%（80.19 vs 84.19 @h=5 等）——**(u, enc(o_T)) 对齐通道就是论文检索性能的来源**；全模型=分支对+零视野对的完整目标函数。v2.0/v2.1 恰好完全没有该通道（cos −0.04）⇒ 随机检索与论文机制自洽。v2.2 逐对式将其接回=全模型读法。
+
+**结论：v2.2 机制与原文锁定一致，可执行；唯一残留歧义（零视野配对比率未指定）已登记。重训仍待用户指令。**
