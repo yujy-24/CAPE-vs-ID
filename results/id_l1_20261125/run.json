@@ -1,0 +1,27 @@
+{
+  "run_id": "id_l1_20261125_remote",
+  "status": "completed",
+  "started_at": "2026-11-25T19:47:08+08:00",
+  "training_completed_at": "2026-11-25T19:53:32+08:00",
+  "evaluation_log_modified_at": "2026-11-25T19:53:52+08:00",
+  "source_commit": "a46f93be98064ac39d8b3cd3f0ebb72ced17d9c4",
+  "arm": "id",
+  "seed": 42,
+  "tag": "_l1",
+  "loss_form": "l1",
+  "shuffle_labels": false,
+  "steps": 20000,
+  "train_windows": 7993,
+  "validation_windows": 995,
+  "validation_action_pairs": 9950,
+  "checkpoint_server_path": "/root/shared-nvme/CAPE-vs-ID/cache_v3/ckpt/id_l1/final.pt",
+  "checkpoint_sha256_record": "checksums.sha256",
+  "checkpoint_tracked_in_git": false,
+  "evaluation": {
+    "space": "id_direct",
+    "y_shuffle": false,
+    "r2_pooled": -0.1804,
+    "r2_dims": [-0.1251, -0.1581, 0.0665, -0.0495, 0.0128, -0.1206, -0.4287],
+    "mae": 0.1997
+  }
+}
