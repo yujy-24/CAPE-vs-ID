@@ -19,7 +19,7 @@ bash run_all.sh controls   # id within-task shuffle / L1 对照
 bash run_all.sh eval       # 全套指标电池
 ```
 
-缓存落在 `E:\world_model\id_vs_cape\cache_v2\`（~17GB；v1 cache 仍在 `cache\`）。
+缓存落在 `E:\world_model\id_vs_cape\cache_v3\`（~33GB，含 v2.3 branch sidecar `branch_{split}.npy`；cache_v2 ~17GB 保留）。缓存不入 git：新环境需先跑 `build_cache.py` + `extract_branch_npy.py`（原始数据 + DINOv3 权重）。
 **长任务必须用 Claude Code 后台任务跑**：WSL 内 `nohup ... &` 随 wsl.exe 会话退出即死。
 
 ## v2 协议要点（对论文的忠实实现，防 v1 塌缩重演）
@@ -73,5 +73,7 @@ bash run_all.sh eval       # 全套指标电池
 - [x] cache_v2 构建（三次启动：VM 崩溃→OOM 定位 patch 攒积 13.6GB→逐集释放修复→**dropped 0**，17GB，~15 分钟）
 - [x] **v2.0 主力（seed 42）三臂完成 + 主表**（实验记录·十）：坍缩逃逸成立（cos_random 1.0→0.02）；检索层爆冷（cape Hit@1=0.000=随机）→ 根因=正对缺目标状态（附录 A "zero-horizon training samples"）→ **v2.1 修正案预登记（§12）**：多正对 InfoNCE，cache 增存 o_T patch
 - [x] **v2.1 判决：修正无效**（实验记录·十一）：检索仍随机（Hit@1 0.008/MRR 0.028）、探针 −0.335 分毫不动、goal_cos 全程不爬——**logsumexp 正对集饱和**（u1↔u2 的 e^12 压 s_T 的 e^−0.6，权重比 10⁻⁶，目标正对零梯度）。回读原文：零视野样本应是**独立第三分支**（式 3 成对形式，每对独立分子）→ **v2.2 修正案预登记（§13）**：三分支逐对对称 InfoNCE + s_T 入负键池；代码已落地+冒烟通过，重训待指令（含预登记终止判据：goal_cos<0.2 或检索仍随机 ⇒ 停止 Cape 实现迭代，主线按 ID 探针对比收口）
-- [ ] 剩余队列（被内存压力中止，待重启）：id_seed43、cape/fwd_seed43（cape 用 v2.2 协议）、id_shuf、id_l1
-- [ ] eval 全电池终版 → 主表 v2.2 + H1/H2/H3 判读
+- [x] **v2.3 官方代码移植**（实验记录·十二、设计文档 §14）：官方仓库 chen2151643/CAPE 逐行对齐——50% 随机 anchor 配对、分支=anchor−i×stride4（i≤5）、整批负池+derangement 换动作、valid_len−1 gather、warmup 5%；branch_patch mmap sidecar 修 WSL OOM；冒烟+机制监控全绿（state_frac≈0.5）
+- [ ] **进行中：v2.3 cape 全量重训**（20k 步 seed 42；中期 goal_cos 0.83、swapwins 0.04）
+- [ ] 分工队列：**id_seed43 → id_shuf → id_l1（合作者认领）**；cape/fwd_seed43 待 v2.3 主表后议（协议以 v2.3 为准，README 旧"v2.2 协议"注记作废）
+- [ ] eval 全电池终版 → 主表 v2.3 + H1/H2/H3 判读

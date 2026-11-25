@@ -275,3 +275,8 @@
 - 运行：`train.py --arm cape` 20k 步（seed 42，官方超参），~1.45 步/s，GPU 99%/4.7GB，日志 `cache_v3/ckpt/cape_train.log`（不入 git）。
 - 中期监控（step 4000→6000）：val 0.797→0.644；**goal_cos 0.842→0.831**（v2.0/v2.1 该通道为 −0.04 的死区，现已接通，远高于 0.2 终止线）；**swapwins 0.033→0.038**（swap 负样本强分离）；cf foreign/random 0.43/0.43→0.31/0.27（own≫wrong 排序正确）；state_frac 批内波动属 50% anchor 抽样噪声。
 - 判读（中期、非结论）：预登记两终止条件（goal_cos<0.2 / 检索随机）均远离；主表判定仍以训后 eval_retrieval（四臂同协议）为准。训完补全条目 + v2.3 主表。
+
+**分工与缓存口径确认（2026-11-25，致合作者）**：
+- 分工：id_seed43 → id_shuf → id_l1 由合作者认领（命令即 `python train.py --arm id --seed 43 --tag _seed43`，从头跑，代码只存 final.pt）；我方负责 v2.3 cape 全量重训（进行中）+ 训后评测主表。任何一方动队列前先 `git fetch` 对表，避免重复。
+- **seed 42（cache_v2 训）与 seed 43（cache_v3 训）同口径**，证据链：①cache_v3 用未改动的 manifest 重建，窗口集与 v2 完全一致（7993/995、dropped 0，构建日志）；②id/fwd 臂训练根本不读 branch_patch（id 用 pmean/act_win，fwd 用 pooled/ctx），v2→v3 对它们只是存储布局变化（branch sidecar mmap）；③seed 42 的 id/fwd final.pt 已复制到 `cache_v3/ckpt/{id,fwd}/`，与 v2.3 评测脚本读取路径对齐。汇总两种子无需任何换算。
+- 若在本机跑：4070 正被 cape 重训占用（预计 ~2h 后空出），请错峰；若在自有环境跑：缓存不入 git，需先 `build_cache.py` + `extract_branch_npy.py`（README 已注明）。
