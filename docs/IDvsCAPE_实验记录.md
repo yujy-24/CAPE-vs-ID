@@ -265,3 +265,8 @@
 - `train.py`：cape_loss 重写为官方 `compute_contrastive_loss` 单卡全局版逐行移植——每窗一对（query=k~U{1..5}，key=50% anchor/50% 异支路）、负池=整批 keys+全批 derangement 换动作、单正对+对称 CE、warmup 5%（官方 train.py:236）。监控增 state_frac，保留 goal_cos/swapwins/反事实。
 - `eval_retrieval.py` 重写：query k~U{1..5}（seed 1234 四臂同 query）、池=每窗{分支帧,anchor}双键、排除自身分支键；frozen/fwd/id 不重训同协议重评。`diag_pairwise_cos.py` B 部分支路同步 v2.3。`test_v23_units.py` 新增（4 项全绿）。
 - 冒烟与重训：cache_v3 完成后先 30 步冒烟；160min 重训按 GPU 约定待用户指令。
+
+**v2.3 落地收尾（同日晚）**：
+- cache_v3 构建两段完成（首跑被 Claude Code 内存压力回收器终止于 13/16 片，非构建错误；整跑重Build）：**train 16+val 2 分片、7993/995 窗口、dropped 0、BUILD_EXIT=0**，窗口集与 cache_v2 完全一致（manifest 未动）。
+- **内存坑**：branch_patch 留在 npz 内被 WindowDataset 物化 ⇒ ~24GB 常驻爆 15GiB WSL VM（冒烟首跑 OSError Errno 12）。修复：新增 `extract_branch_npy.py` 抽出每 split 单文件 `branch_{split}.npy`，WindowDataset 改 `mmap_mode='r'` 挂载（调用点零改动，常驻回到 v2 的 ~9.3GB）。run_all.sh cache 阶段已挂抽取步骤；.gitignore 补 cache_v3/。
+- **30 步冒烟（tag _smoke，0.3min）+ no_grad 监控验证（`smoke_diag_v23.py`）**：train loss 2.06 / val 1.78（随机基线 ln95≈4.55）；**state_frac 0.454≈0.5**（官方 50% anchor 配对机制确认，160 样本噪声内）；**swapwins 0.137≪0.5**（swap 负样本被分离）；cf 排序正确：own 0.811 > foreign 0.713 ≈ random 0.749。v2.3 机制端到端验证通过，全量重训（20k 步，~160min）待用户 GPU 指令。

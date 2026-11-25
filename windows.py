@@ -20,24 +20,30 @@ class WindowDataset(Dataset):
     def __init__(self, split):
         paths = sorted(glob.glob(os.path.join(CACHE, f"{split}_shard_*.npz")))
         assert paths, f"no shards for split={split} under {CACHE}; run build_cache.py first"
-        cp, pl, pm, aw, gp, bp = [], [], [], [], [], []
+        cp, pl, pm, aw, gp = [], [], [], [], []
         meta = {k: [] for k in ("ep", "T", "t1", "t2", "task", "rand_ep", "rand_fr")}
         for p in paths:
             z = np.load(p)
             cp.append(z["ctx_patch"]); pl.append(z["pooled"])
             pm.append(z["pmean"]); aw.append(z["act_win"])
-            gp.append(z["goal_patch"]); bp.append(z["branch_patch"])
+            gp.append(z["goal_patch"])
             for k in meta:
                 meta[k].append(z[k])
         self.ctx_patch = np.concatenate(cp)   # [N,2,196,768] fp16 (t1/t2, legacy v2)
         self.goal_patch = np.concatenate(gp)  # [N,196,768] fp16 (v2.1 goal state)
-        self.branch_patch = np.concatenate(bp)  # [N,HV23+1,196,768] fp16 (v2.3)
+        # v2.3 branch frames: mmap'd sidecar (npz member eager-loaded would add
+        # ~17 GB resident -> OOM in the 15 GiB WSL VM; see extract_branch_npy.py)
+        branch_path = os.path.join(CACHE, f"branch_{split}.npy")
+        assert os.path.exists(branch_path), (
+            f"{branch_path} missing; run extract_branch_npy.py after build_cache.py")
+        self.branch_patch = np.load(branch_path, mmap_mode="r")
         self.pooled = np.concatenate(pl)      # [N,29,768] fp16 (CLS)
         self.pmean = np.concatenate(pm)       # [N,29,768] fp16 (patch-mean)
         self.act_win = np.concatenate(aw)     # [N,PAST,7] f32, covers [T-PAST..T)
         self.meta = {k: np.concatenate(v) for k, v in meta.items()}
         assert self.pooled.shape[1] == PAST + FUTS + 2, self.pooled.shape
         assert self.branch_patch.shape[1] == HV23 + 1, self.branch_patch.shape
+        assert len(self.branch_patch) == len(self.act_win), "branch sidecar misaligned"
         # episodes with >=2 windows: cape grouped batching pool
         self.ep_of = {}
         for i, e in enumerate(self.meta["ep"]):

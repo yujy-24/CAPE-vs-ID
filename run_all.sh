@@ -25,6 +25,7 @@ case "$STAGE" in
   cache)
     echo "=== stage 4: feature cache v3 (adds branch_patch 6 slots; long: ~1-2 h) ==="
     "$PY" build_cache.py
+    "$PY" extract_branch_npy.py
     echo ">>> alignment already verified on v1 videos (5/5, log entry 三);"
     echo ">>> if dataset unchanged, skip the human jpg check."
     ;;
