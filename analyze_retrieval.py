@@ -18,7 +18,8 @@ from common import HV23, IDX_T, PAST, STRIDE_V23
 from modules import CAPEModel
 from windows import WindowDataset, pad_branches
 
-CKPT = "cache_v3/ckpt/cape/final.pt"
+import sys
+CKPT = sys.argv[1] if len(sys.argv) > 1 else "cache_v3/ckpt/cape/final.pt"
 
 
 @torch.no_grad()
