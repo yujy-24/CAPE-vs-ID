@@ -8,6 +8,9 @@
 | 2026-11-25 17:08:44 | `id_seed43_20261125_remote` | `completed` | 20,000 步；[训练日志](../results/id_seed43_20261125/train.log)、[逐步指标](../results/id_seed43_20261125/metrics.jsonl)、[检查点校验](../results/id_seed43_20261125/checksums.sha256) |
 | 2026-11-25 17:09:12 | `id_seed43_20261125_remote` | `evaluated` | [验证日志](../results/id_seed43_20261125/eval.log)：9,950 对，R² −0.0404，MAE 0.2033；随后核验两机权重一致 |
 | 2026-11-25 17:39:19 | `id_seed43_20261125_remote` | `verified` | 本机核对（见下方哈希注记）：encoder 两机逐字节一致 ⇒ 跨种子比较有效；manifest 字节差异仅涉 cape 辅助列，不影响 id 臂 |
+| 2026-11-25 19:05:50 | `id_shuf_20261125_remote` | `started` | [开始时间](../results/id_shuf_20261125/started_at.txt)、[训练配置](../results/id_shuf_20261125/config.jsonl)；源码 `a46f93be98064ac39d8b3cd3f0ebb72ced17d9c4` |
+| 2026-11-25 19:12:14 | `id_shuf_20261125_remote` | `completed` | `train_exit=0`，20,000 步；[状态](../results/id_shuf_20261125/status.txt)、[训练日志](../results/id_shuf_20261125/train.log)、[逐步指标](../results/id_shuf_20261125/metrics.jsonl)、[检查点校验](../results/id_shuf_20261125/checksums.sha256) |
+| 2026-11-25 19:13:54 | `id_shuf_20261125_remote` | `evaluated` | [评估日志](../results/id_shuf_20261125/eval.log)：9,950 对，R² −0.1182，MAE 0.2167 |
 
 **哈希核对注记（2026-11-25 17:39，本机 WSL）**：
 - **encoder 一致**：本机 `/home/yjy/LaWAM/weights/dinov3-vitb16-pretrain-lvd1689m/model.safetensors`（342,662,192 B）SHA-256 = `9a21ac3df0c63839d62612dda6f454d816c25611cc7a52966ed5a5a94921dc8b`，与远端 ModelScope 文件完全相同。`encoder_sha256_matches_hugging_face_main: false` 仅表示与 HF 当前 main 文件字节不同，差异原因尚未验证，**不是两机差异**——seed 42（本机）与 seed 43（远端）特征出自同一份权重，`comparison_status` 可从 `provisional_encoder_checksum_mismatch` 升级为有效。
