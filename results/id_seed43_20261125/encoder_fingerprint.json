@@ -1,0 +1,19 @@
+{
+  "model_dir": "/root/shared-nvme/inputs/dinov3-vitb16-pretrain-lvd1689m",
+  "weights_size_bytes": 342662192,
+  "weights_file_sha256": "9a21ac3df0c63839d62612dda6f454d816c25611cc7a52966ed5a5a94921dc8b",
+  "weights_tensor_sha256": "aa819563597cfc6231088b4c1a346e29eafae881c698fcf7d44df405ab48bd16",
+  "tensor_count": 211,
+  "config_sha256": "3c9cc418f4622fd6d5587fd142b6f3cba0ba6a69f67ced907d8b7f26118451ec",
+  "preprocessor_sha256": "960c41d1f3a7778b936365769a2d90550b318a6c0a53a0296957adacfe5e0dd7",
+  "image_mean": [
+    0.485,
+    0.456,
+    0.406
+  ],
+  "image_std": [
+    0.229,
+    0.224,
+    0.225
+  ]
+}

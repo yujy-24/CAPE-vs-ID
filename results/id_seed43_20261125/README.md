@@ -11,6 +11,8 @@
 
 原始产物：`config.jsonl` 为训练参数，`metrics.jsonl` 为逐步训练与验证损失，`train.log` 和 `eval.log` 为终端输出，`cache_build_summary.log` 为缓存构建摘要，`checksums.sha256` 记录检查点、manifest 和实际 DINOv3 权重的 SHA-256；完整机器可读摘要见 `run.json`。
 
-**比较状态：待确认编码器一致性。**该实例通过 ModelScope 取得的 DINOv3 文件为 342,662,192 字节，仓库骨干前向输出形状符合预期，但其 SHA-256 与 [Hugging Face 官方同名权重](https://huggingface.co/facebook/dinov3-vitb16-pretrain-lvd1689m) 的 `main` 版本不一致。此处如实保留结果，不能仅凭窗口数量相同就将它与 seed 42 当作严格同权重的两次随机种子实验。需与 seed 42 实际使用的权重哈希或特征缓存核对后，再纳入跨种子汇总。
+[`encoder_fingerprint.json`](encoder_fingerprint.json) 还记录了该权重的规范化张量哈希与预处理配置。如何同 seed 42 原权重比较，见[权重一致性检查](../../docs/WEIGHT_VERIFICATION.md)。
+
+**跨种子权重核验已完成。**合作者在 seed 42 原机器计算的 `model.safetensors` SHA-256 与本次云端文件完全相同；我们又将其完整哈希与本目录 `checksums.sha256` 独立比对，结果一致。因此，先前由编码器权重不同引起的跨种子疑虑已排除。[运行台账](../../docs/RUN_LEDGER.md)记录了核验来源。两机共同使用的文件与 [Hugging Face 官方同名模型](https://huggingface.co/facebook/dinov3-vitb16-pretrain-lvd1689m) 当前 `main` 文件的字节哈希仍不同；它是否仅为 safetensors 序列化差异、或张量数值也不同，尚未验证。这一差异不造成 seed 42 与 seed 43 **之间**的权重差别。进一步验证方法见[权重一致性检查](../../docs/WEIGHT_VERIFICATION.md)。
 
 检查点 `final.pt` 为 80,401,406 字节，保存在本次实例的 `/root/shared-nvme/CAPE-vs-ID/cache_v3/ckpt/id_seed43/final.pt`；仓库的 `.gitignore` 排除 `*.pt` 和 `cache_v3/`，因此这里仅提交原始数值日志与校验信息。服务器的 `branch_*.npy` 旁路文件因共享盘容量限制放在实例系统盘；释放实例后，若再运行当前加载器，须从共享盘 `cache_v3/*_shard_*.npz` 重新提取旁路文件。

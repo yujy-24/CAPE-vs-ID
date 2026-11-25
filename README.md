@@ -23,6 +23,7 @@ bash run_all.sh eval       # 全套指标电池
 **长任务必须用 Claude Code 后台任务跑**：WSL 内 `nohup ... &` 随 wsl.exe 会话退出即死。
 
 跨机器运行状态见 [`docs/RUN_LEDGER.md`](docs/RUN_LEDGER.md)；已完成的 ID seed 43 原始日志、配置和指标见 [`results/id_seed43_20261125/`](results/id_seed43_20261125/)。记录开始与结束是两次独立事件，完成后再附评估和检查点校验信息。
+跨种子输入一致性检查见 [`docs/WEIGHT_VERIFICATION.md`](docs/WEIGHT_VERIFICATION.md)。
 
 ## v2 协议要点（对论文的忠实实现，防 v1 塌缩重演）
 
@@ -77,6 +78,6 @@ bash run_all.sh eval       # 全套指标电池
 - [x] **v2.1 判决：修正无效**（实验记录·十一）：检索仍随机（Hit@1 0.008/MRR 0.028）、探针 −0.335 分毫不动、goal_cos 全程不爬——**logsumexp 正对集饱和**（u1↔u2 的 e^12 压 s_T 的 e^−0.6，权重比 10⁻⁶，目标正对零梯度）。回读原文：零视野样本应是**独立第三分支**（式 3 成对形式，每对独立分子）→ **v2.2 修正案预登记（§13）**：三分支逐对对称 InfoNCE + s_T 入负键池；代码已落地+冒烟通过，重训待指令（含预登记终止判据：goal_cos<0.2 或检索仍随机 ⇒ 停止 Cape 实现迭代，主线按 ID 探针对比收口）
 - [x] **v2.3 官方代码移植**（实验记录·十二、设计文档 §14）：官方仓库 chen2151643/CAPE 逐行对齐——50% 随机 anchor 配对、分支=anchor−i×stride4（i≤5）、整批负池+derangement 换动作、valid_len−1 gather、warmup 5%；branch_patch mmap sidecar 修 WSL OOM；冒烟+机制监控全绿（state_frac≈0.5）
 - [x] **v2.3 cape 全量重训完成**（134.9min，goal_cos 0.851/swapwins 0.000）+ 检索主表（实验记录·十四）：**Hit@1 cape 0.192 > frozen 0.125（+6.7pt≈6σ）/ Hit@5 0.449 / MRR 0.319**，随机≈0.004——终止判据未触发，v2.0/v2.1 连续随机的检索层被官方机制移植救活；协议以 v2.3 收口
-- [x] **id_seed43 云端训练与评估完成**（20k 步；ID 直读 R² −0.0404、MAE 0.2033，与 seed42 −0.009/0.198 跨种子一致）。encoder 疑点已核实：两机权重 SHA-256 逐字节一致（`9a21ac3d…`），与 HF main 的差异为主分支后续 revision，**跨种子汇总有效**（RUN_LEDGER 哈希注记）
+- [x] **id_seed43 云端训练与评估完成**（20k 步；ID 直读 R² −0.0404、MAE 0.2033，与 seed42 −0.009/0.198 接近）。两机权重文件 SHA-256 相同，可作同权重跨种子比较；与 HF 当前 `main` 文件的字节差异原因尚未验证，详见运行台账。
 - [x] **eval 全电池终版 + v2.3 主表 + H 判读**（实验记录·十四终）：H1 半成立（cape 检索✓；id 探针相对最优但绝对 R²≈0，正值主张未复现）；H2 按排序成立（id 赢探针/cape 赢检索，fwd<frozen="预报≠检索"）；探针仪器警示（全空间 R²≤0 且 shuffle 地板倒挂，只取排序）
 - [ ] 剩余：**id_shuf → id_l1（合作者）**；**cape-noswap 消融（建议补入，H3 收口）**；双种子检索并表（seed43 cape 可选）

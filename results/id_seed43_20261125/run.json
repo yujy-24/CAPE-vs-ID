@@ -1,7 +1,7 @@
 {
   "run_id": "id_seed43_20261125_remote",
   "status": "completed",
-  "comparison_status": "provisional_encoder_checksum_mismatch",
+  "comparison_status": "seed42_seed43_encoder_file_sha256_identical",
   "started_at": "2026-11-25T17:02:27+08:00",
   "training_completed_at": "2026-11-25T17:08:44+08:00",
   "evaluation_completed_at": "2026-11-25T17:09:12+08:00",
@@ -28,6 +28,8 @@
     "encoder_download_source": "ModelScope",
     "encoder_size_bytes": 342662192,
     "encoder_sha256_matches_hugging_face_main": false,
+    "encoder_tensor_fingerprint_record": "encoder_fingerprint.json",
+    "encoder_file_sha256_matches_seed42": true,
     "cache": "cache_v3",
     "train_windows": 7993,
     "validation_windows": 995,

@@ -6,11 +6,11 @@
 |---|---|---|---|
 | 2026-11-25 17:02:27 | `id_seed43_20261125_remote` | `started` | [配置](../results/id_seed43_20261125/config.jsonl)，源码 `a46f93be98064ac39d8b3cd3f0ebb72ced17d9c4`，RTX 4090，`train.py --arm id --seed 43 --tag _seed43` |
 | 2026-11-25 17:08:44 | `id_seed43_20261125_remote` | `completed` | 20,000 步；[训练日志](../results/id_seed43_20261125/train.log)、[逐步指标](../results/id_seed43_20261125/metrics.jsonl)、[检查点校验](../results/id_seed43_20261125/checksums.sha256) |
-| 2026-11-25 17:09:12 | `id_seed43_20261125_remote` | `evaluated` | [验证日志](../results/id_seed43_20261125/eval.log)：9,950 对，R² −0.0404，MAE 0.2033；权重一致性待确认 |
+| 2026-11-25 17:09:12 | `id_seed43_20261125_remote` | `evaluated` | [验证日志](../results/id_seed43_20261125/eval.log)：9,950 对，R² −0.0404，MAE 0.2033；随后核验两机权重一致 |
 | 2026-11-25 17:39:19 | `id_seed43_20261125_remote` | `verified` | 本机核对（见下方哈希注记）：encoder 两机逐字节一致 ⇒ 跨种子比较有效；manifest 字节差异仅涉 cape 辅助列，不影响 id 臂 |
 
 **哈希核对注记（2026-11-25 17:39，本机 WSL）**：
-- **encoder 一致**：本机 `/home/yjy/LaWAM/weights/dinov3-vitb16-pretrain-lvd1689m/model.safetensors`（342,662,192 B）SHA-256 = `9a21ac3df0c63839d62612dda6f454d816c25611cc7a52966ed5a5a94921dc8b`，与远端 ModelScope 文件完全相同。`encoder_sha256_matches_hugging_face_main: false` 反映的是 HF main 分支后续 revision 变化，**不是两机差异**——seed 42（本机）与 seed 43（远端）特征出自同一份权重，`comparison_status` 可从 `provisional_encoder_checksum_mismatch` 升级为有效。
+- **encoder 一致**：本机 `/home/yjy/LaWAM/weights/dinov3-vitb16-pretrain-lvd1689m/model.safetensors`（342,662,192 B）SHA-256 = `9a21ac3df0c63839d62612dda6f454d816c25611cc7a52966ed5a5a94921dc8b`，与远端 ModelScope 文件完全相同。`encoder_sha256_matches_hugging_face_main: false` 仅表示与 HF 当前 main 文件字节不同，差异原因尚未验证，**不是两机差异**——seed 42（本机）与 seed 43（远端）特征出自同一份权重，`comparison_status` 可从 `provisional_encoder_checksum_mismatch` 升级为有效。
 - **manifest 字节不同、实质等价**：本机 `cache_v3/manifest.parquet` SHA-256 = `d9cffd6a…` ≠ 远端 `358078aa…`；窗口数一致（7,993/995，dropped 0），差异位于 t1/t2/rand 辅助列与序列化元数据（两机 numpy/pyarrow 版本不同的 seeded 抽样漂移）。id 臂训练与探针**不读这些列**（cape 配对专用），故 id 两种子对比不受影响；若日后跨机跑 **cape** 臂，须先统一 manifest 哈希。
 
 下一次启动训练时，先在此表追加并提交 `started` 行；跑完或中断后再提交最终事件及原始产物。运行详情与已知限制见 [ID seed 43 记录](../results/id_seed43_20261125/README.md)。
