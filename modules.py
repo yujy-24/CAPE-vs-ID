@@ -57,14 +57,28 @@ class ActionQueryDecoder(nn.Module):
         self.blocks = nn.ModuleList([DecBlock(dim, heads, ff) for _ in range(layers)])
 
     def forward(self, ctx, actions, lengths=None):
-        """ctx [B, 196, dim]; actions [B, n, 7] padded to n<=H_MAX_ACT.
-        -> final-horizon token [B, dim] plus all tokens [B, n, dim]"""
-        q = self.act_proj(actions) + self.pos[:, :actions.shape[1]]
-        n = actions.shape[1]
+        """ctx [B, 196, dim]; actions [B, n, 7] padded to n<=H_MAX_ACT;
+        lengths [B] = valid action counts. Final token is gathered at each
+        sample's LAST VALID slot (official cape_model.py: valid_len-1); pad
+        slots carry the empty-action query and are never read out.
+        -> (final token [B, dim], all tokens [B, n, dim])"""
+        B, n = actions.shape[0], actions.shape[1]
+        q = self.act_proj(actions) + self.pos[:, :n]
+        if lengths is None:
+            lengths = torch.full((B,), n, dtype=torch.long, device=ctx.device)
+        lengths = lengths.to(ctx.device)
+        # official: pad slots are REPLACED by the learnable noop token (they
+        # would otherwise leak a proj(0)+pos pseudo-action into nothing, but
+        # we mirror the reference exactly -- pads are discarded either way).
+        pad = torch.arange(n, device=ctx.device).unsqueeze(0) >= lengths.unsqueeze(1)
+        if pad.any():
+            q = torch.where(pad.unsqueeze(-1), self.empty.expand(B, n, -1), q)
         mask = torch.triu(torch.ones(n, n, dtype=torch.bool), diagonal=1).to(ctx.device)
         for blk in self.blocks:
             q = blk(q, ctx, mask)
-        return q[:, -1], q
+        idx = torch.arange(B, device=ctx.device)
+        last = q[idx, (lengths - 1).clamp(min=0)]
+        return last, q
 
     def forward_state(self, ctx):
         """empty-action state encoding: single learnable query, same blocks.
@@ -106,7 +120,8 @@ class CAPEModel(nn.Module):
         self.g = ProjHead(dim)
 
     def forward(self, patch, actions, lengths=None):
-        """patch [B, 196, 768]; actions [B, n, 7] -> u [B, 256] (normalised)"""
+        """patch [B, 196, 768]; actions [B, n, 7] (+lengths, v2.3)
+        -> u [B, 256] (normalised)"""
         c = self.ctx(patch)
         last, _ = self.dec(c, actions, lengths)
         return self.g(last)

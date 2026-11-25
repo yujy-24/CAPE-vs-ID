@@ -25,7 +25,8 @@ import pandas as pd
 import torch
 
 from backbone import FrozenDINOv3
-from common import CACHE, DATA_ROOT, FUTS, H, IDX_T, MANIFEST, PAST, device
+from common import (CACHE, DATA_ROOT, FUTS, H, HV23, IDX_T, MANIFEST, PAST,
+                    STRIDE_V23, device)
 
 SHARD = 512
 N_PATCH_HIST = 256          # probe-patch flush granularity (windows); parts on
@@ -91,6 +92,7 @@ def main():
         e, T = int(r["episode"]), int(r["T"])
         need[e].update(range(T - PAST, T + FUTS + 1))
         pf = {int(r["t1"]), int(r["t2"]), T}          # T: goal-state patch (v2.1)
+        pf.update(T - k * STRIDE_V23 for k in range(1, HV23 + 1))  # v2.3 branches
         if probe_keep[pos]:
             pf.update(range(T - H, T + 1))          # probe window frames
         need_patch[e].update(pf)
@@ -138,12 +140,16 @@ def main():
             rk = (int(r["rand_episode"]), int(r["rand_frame"]))
             if (any((e, f) not in feats for f in fs) or rk not in feats
                     or (e, int(r["t1"])) not in patches or (e, int(r["t2"])) not in patches
-                    or (e, T) not in patches):
+                    or (e, T) not in patches
+                    or any((e, T - k * STRIDE_V23) not in patches
+                           for k in range(1, HV23 + 1))):
                 dropped["n"] += 1
                 continue
             rec = dict(
                 ctx_patch=np.stack([patches[(e, int(r["t1"]))], patches[(e, int(r["t2"]))]]),
                 goal_patch=patches[(e, T)],
+                branch_patch=np.stack(               # v2.3: [T-20,...,T-4,T]
+                    [patches[(e, T - k * STRIDE_V23)] for k in range(HV23, -1, -1)]),
                 pooled=np.stack([feats[(e, f)] for f in fs] + [feats[rk]]),
                 pmean=np.stack([pmeans[(e, f)] for f in fs] + [pmeans[rk]]),
                 act_win=acts[e][T - PAST:T],
@@ -219,6 +225,7 @@ def save_shard(recs, shard_id, split):
     np.savez(out,
              ctx_patch=np.stack([r["ctx_patch"] for r in recs]),
              goal_patch=np.stack([r["goal_patch"] for r in recs]),
+             branch_patch=np.stack([r["branch_patch"] for r in recs]),
              pooled=np.stack([r["pooled"] for r in recs]),
              pmean=np.stack([r["pmean"] for r in recs]),
              act_win=np.stack([r["act_win"] for r in recs]),

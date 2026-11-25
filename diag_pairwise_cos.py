@@ -1,26 +1,25 @@
-"""L2-style diversity / collapse diagnostics (v2).
+"""L2-style diversity / collapse diagnostics (v2.3).
 
 part A (raw features, val windows):
   cos(o_T, o_{T+d}) d=1..3          temporal closeness (CLS and pmean)
   cos(o_T, o_rand) cross-episode    background/scene similarity floor
   cos(o_T, o_T'other)               generic similarity floor
-part B (arm space, --ckpt):
-  cos(u1, u2)        branch1 vs branch2 (different ctx AND acts, same o_T)
+part B (arm space, --ckpt; v2.3 branches k ~ U{1..5}, stride 4):
+  cos(u1, u2)        two branches k1 != k2 (different ctx AND acts, same o_T)
   cos(u_b, enc(o_T)) branch prediction vs empty-action outcome key (training goal)
-  cos(u2, uswap)     ctx_t2 + foreign same-episode acts -> different outcome
+  cos(u2, uswap)     ctx_2 + foreign same-episode acts (same k) -> other outcome
   swap-wins = P[cos(u2,uswap) > cos(u2,u1)]     (lower better; 0.5 = action-blind)
-  cf cos(u2, u(foreign acts)) / cos(u2, u(random acts))  with ctx FIXED
+  cf cos(u2, u(random acts))  with ctx FIXED
 """
 import argparse
-import os
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 
-from common import CACHE, FUTS, IDX_T, PAST
+from common import FUTS, HV23, IDX_T, PAST
 from modules import CAPEModel
-from windows import WindowDataset, pad_actions, probe_window_frame
+from windows import WindowDataset, pad_branches
 
 
 def stats(x):
@@ -31,7 +30,7 @@ def stats(x):
 @torch.no_grad()
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ckpt", default=None, help="e.g. cache_v2/ckpt/cape/final.pt")
+    ap.add_argument("--ckpt", default=None, help="e.g. cache_v3/ckpt/cape/final.pt")
     ap.add_argument("--n", type=int, default=1000)
     a = ap.parse_args()
     dev = "cuda" if torch.cuda.is_available() else "cpu"
@@ -52,39 +51,38 @@ def main():
     if not a.ckpt:
         return
 
-    # ---- part B: arm space ----
+    # ---- part B: arm space (v2.3 official-offset branches) ----
     ck = torch.load(a.ckpt, map_location="cpu", weights_only=False)
     model = CAPEModel(); model.load_state_dict(ck["model"]); model.eval().to(dev)
 
-    pm = np.load(os.path.join(CACHE, "probe_meta_val.npy"))
-    key2prow = {(int(e), int(T)): r for r, (e, T) in enumerate(pm)}
-
-    # foreign-act donors: another window of the SAME episode (hard), same length class
     rng = np.random.default_rng(0)
+    k1 = rng.integers(1, HV23 + 1, size=len(idxs))              # branch A
+    k2 = 1 + (k1 - 1 + rng.integers(1, HV23, size=len(idxs))) % HV23   # k2 != k1
     c12, c1k, c2k, csw, cfr = [], [], [], [], []
     wins = 0
     bs = 16
     for s in range(0, len(idxs), bs):
         ii = idxs[s:s + bs]
-        ctx1 = torch.from_numpy(ds.ctx_patch[ii, 0].astype(np.float32)).to(dev)
-        ctx2 = torch.from_numpy(ds.ctx_patch[ii, 1].astype(np.float32)).to(dev)
-        acts1 = [torch.from_numpy(ds.branch(int(i), 1)[1]) for i in ii]
-        acts2 = [torch.from_numpy(ds.branch(int(i), 2)[1]) for i in ii]
-        a1 = pad_actions(acts1); a2 = pad_actions(acts2)
-        u1 = model(ctx1, a1.to(dev))
-        u2 = model(ctx2, a2.to(dev))
-        pT = np.stack([probe_window_frame("val", key2prow[(int(ds.meta['ep'][i]),
-                                                          int(ds.meta['T'][i]))])
-                       for i in ii])
-        kT = model.encode_state(torch.from_numpy(pT.astype(np.float32)).to(dev))
-        fidx = []
-        for i in ii:
+        b1 = [ds.branch_v23(int(i), int(k)) for i, k in zip(ii, k1[s:s + bs])]
+        b2 = [ds.branch_v23(int(i), int(k)) for i, k in zip(ii, k2[s:s + bs])]
+        ctx1 = torch.from_numpy(np.stack([b[0] for b in b1])).to(dev)
+        ctx2 = torch.from_numpy(np.stack([b[0] for b in b2])).to(dev)
+        a1, l1 = pad_branches([b[1] for b in b1])
+        a2, l2 = pad_branches([b[1] for b in b2])
+        u1 = model(ctx1, a1.to(dev), l1.to(dev))
+        u2 = model(ctx2, a2.to(dev), l2.to(dev))
+        pT = torch.from_numpy(
+            ds.branch_patch[ii, HV23].astype(np.float32)).to(dev)
+        kT = model.encode_state(pT)
+        fidx = np.empty(len(ii), dtype=int)   # foreign acts: same-episode donor, same k
+        for t_, i in enumerate(ii):
             same = [j for j in ds.ep_of[int(ds.meta["ep"][i])] if j != i]
-            fidx.append(int(same[rng.integers(len(same))]) if same else int(i))
-        a_f = pad_actions([ds.branch(int(j), 2)[1] for j in fidx])
-        u_sw = model(ctx2, a_f.to(dev))            # same ctx_t2, foreign actions
+            fidx[t_] = int(same[rng.integers(len(same))]) if same else int(i)
+        fb = [ds.branch_v23(int(j), int(k)) for j, k in zip(fidx, k2[s:s + bs])]
+        a_f, l_f = pad_branches([b[1] for b in fb])
+        u_sw = model(ctx2, a_f.to(dev), l_f.to(dev))   # same ctx_2, foreign actions
         a_r = torch.randn_like(a2) * 0.3
-        u_r = model(ctx2, a_r.to(dev))
+        u_r = model(ctx2, a_r.to(dev), l2.to(dev))
         c12.append(F.cosine_similarity(u1, u2, -1).cpu().numpy())
         c1k.append(F.cosine_similarity(u1, kT, -1).cpu().numpy())
         c2k.append(F.cosine_similarity(u2, kT, -1).cpu().numpy())

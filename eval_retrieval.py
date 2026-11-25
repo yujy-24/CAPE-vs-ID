@@ -1,17 +1,19 @@
-"""Layer-3 metric: paper-style retrieval (v2, CAPE §5.2 protocol).
+"""Layer-3 metric: paper-style retrieval (v2.3, CAPE §5.2 + official C.1).
 
-  query : (ctx_t1, acts[t1..t2)) -> u, horizon h = t2-t1 (5..12, exactly the
-          branch-2 length range -> in-distribution generalisation test)
-  pool  : per task, state encodings of every val window's t1 AND t2 frames
-          (~2 x n_windows_per_task candidates; paper: all frames of the task)
-  hit   : rank of the query's own t2 encoding among the pool;
-          the query's own t1 key is EXCLUDED (near-duplicate of the query ctx).
-  arms:
-    frozen  raw CLS cosine between t1 and key frames (zero-action baseline)
-    cape    cos(u, encode_state(key patch))      (shared empty-action space)
-    fwd     FwdModel(ctx_t1, acts)->768 vs CLS z(key)
-    id      -||IDNet(pmean[t2-1], pmean[key]) - a[t2-1]||_1
-            (1-step scoring; anchor t2-1 is NOT known at query time ->
+  query : (ctx at T-4k, acts[T-4k..T)) -> u, k ~ U{1..5} seeded(1234)
+          -- EXACTLY the training branch distribution (in-distribution);
+          acts are 4k per-frame deltas, model gathers at valid length.
+  pool  : per task, TWO keys per val window = {branch frame T-4k, anchor T}
+          (~2 x n_windows_per_task candidates, same scale as v2's t1/t2 pool;
+          paper: all frames of the task, ~420)
+  hit   : rank of the query's own ANCHOR key among the pool; the query's own
+          branch key (near-duplicate of the query ctx) is EXCLUDED.
+  arms (all scored under the SAME v2.3 protocol, no retraining needed):
+    frozen  raw CLS cosine between ctx frame and key frames (zero-action)
+    cape    cos(u, encode_state(key patch))   (shared empty-action space)
+    fwd     FwdModel(ctx, acts)->768 vs CLS(key)
+    id      -||IDNet(pmean[T-1], pmean[key]) - a[T-1]||_1
+            (1-step scoring; anchor T-1 is NOT known at query time ->
              registered diagnostic, not a fair forecast; see log entry 五)
 
 reports Hit@1/5, MRR (micro over queries + macro over tasks).
@@ -23,15 +25,10 @@ from collections import defaultdict
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 
-from common import CACHE, CKPT_DIR, PAST, append_jsonl
+from common import CACHE, CKPT_DIR, HV23, IDX_T, PAST, STRIDE_V23, append_jsonl
 from modules import CAPEModel, FwdModel, IDNet
-from windows import WindowDataset, pad_actions
-
-
-def slot_of(ds, i, frame):
-    return int(frame) - (int(ds.meta["T"][i]) - PAST)
+from windows import WindowDataset, pad_branches
 
 
 @torch.no_grad()
@@ -53,20 +50,27 @@ def main():
         model = {"cape": CAPEModel, "fwd": FwdModel, "id": IDNet}[a.arm]()
         model.load_state_dict(ck["model"]); model.to(dev).eval()
 
-    # ---- encode the two key frames of every val window ----
+    # query branch per window: k ~ U{1..HV23}, FIXED seed -> same queries for
+    # every arm (matched protocol across arms)
+    kq = np.random.default_rng(1234).integers(1, HV23 + 1, size=N)
+    off = kq * STRIDE_V23                                        # 4..20 frames
+
+    # ---- two key frames of every val window: branch frame + anchor ----
     if a.arm == "cape":
-        k1 = np.concatenate([model.encode_state(
-            torch.from_numpy(ds.ctx_patch[s:s + a.bs, 0].astype(np.float32)).to(dev)
-        ).cpu().numpy() for s in range(0, N, a.bs)])
-        k2 = np.concatenate([model.encode_state(
-            torch.from_numpy(ds.ctx_patch[s:s + a.bs, 1].astype(np.float32)).to(dev)
-        ).cpu().numpy() for s in range(0, N, a.bs)])
-        K = np.stack([k1, k2], 1)                                  # [N,2,256]
-    elif a.arm in ("frozen", "fwd", "id"):
+        kb = model.encode_state(
+            torch.from_numpy(
+                ds.branch_patch[np.arange(N), HV23 - kq].astype(np.float32)).to(dev)
+        ).cpu().numpy()
+        kt = model.encode_state(
+            torch.from_numpy(
+                ds.branch_patch[np.arange(N), HV23].astype(np.float32)).to(dev)
+        ).cpu().numpy()
+        K = np.stack([kb, kt], 1)                                # [N,2,256]
+    else:
         feat = ds.pooled if a.arm != "id" else ds.pmean
-        s1 = np.array([slot_of(ds, i, ds.meta["t1"][i]) for i in range(N)])
-        s2 = np.array([slot_of(ds, i, ds.meta["t2"][i]) for i in range(N)])
-        K = np.stack([feat[np.arange(N), s1], feat[np.arange(N), s2]], 1).astype(np.float32)
+        sb = PAST - off                                          # branch slots
+        K = np.stack([feat[np.arange(N), sb], feat[np.arange(N), IDX_T]], 1
+                     ).astype(np.float32)                        # [N,2,768]
 
     by_task = defaultdict(list)
     for i in range(N):
@@ -77,29 +81,25 @@ def main():
         idxs = np.arange(s, min(s + a.bs, N))
         B = len(idxs)
         if a.arm == "frozen":
-            q = K[idxs, 0]
+            q = K[idxs, 0]                                       # CLS of ctx frame
         elif a.arm == "id":
-            pass                                                  # scored below
+            pass                                                 # scored below
         else:
-            ctx = torch.from_numpy(ds.ctx_patch[idxs, 0].astype(np.float32)).to(dev)
-            acts = []
-            for i in idxs:
-                t1, t2 = int(ds.meta["t1"][i]), int(ds.meta["t2"][i])
-                lo = t1 - (int(ds.meta["T"][i]) - PAST)
-                acts.append(ds.act_win[i][lo:lo + (t2 - t1)])
-            acts = pad_actions(acts)
-            q = model(ctx, acts.to(dev)).cpu().numpy()
+            ctx = torch.from_numpy(
+                ds.branch_patch[idxs, HV23 - kq[idxs]].astype(np.float32)).to(dev)
+            acts, lens = pad_branches(
+                [ds.act_win[i][PAST - o:] for i, o in zip(idxs, off[idxs])])
+            q = model(ctx, acts.to(dev), lens.to(dev)).cpu().numpy()
 
         for b, i in enumerate(idxs):
             pool_ix = by_task[int(tasks[i])]
-            keys = K[pool_ix].reshape(-1, K.shape[-1])   # [2M,D] t1,t2 interleaved
+            keys = K[pool_ix].reshape(-1, K.shape[-1])   # [2M,D] branch,anchor
             p = pool_ix.index(i)
-            own1, true = 2 * p, 2 * p + 1                # own t1 (excl) / own t2
+            own1, true = 2 * p, 2 * p + 1                # own branch (excl)/anchor
             if a.arm == "id":
-                t2 = int(ds.meta["t2"][i])
                 anchor = torch.from_numpy(
-                    ds.pmean[i][slot_of(ds, i, t2 - 1)].astype(np.float32)).to(dev)
-                a_gt = torch.from_numpy(ds.act_win[i][slot_of(ds, i, t2 - 1)]).to(dev)
+                    ds.pmean[i][PAST - 1].astype(np.float32)).to(dev)
+                a_gt = torch.from_numpy(ds.act_win[i][PAST - 1]).to(dev)
                 kk = torch.from_numpy(keys).to(dev)
                 pred = model(anchor.unsqueeze(0).expand(len(kk), -1), kk)
                 sims = -torch.abs(pred - a_gt.unsqueeze(0)).sum(-1).cpu().numpy()
@@ -119,7 +119,7 @@ def main():
     macro = {f"hit@{k}": float(np.mean([(np.array(r) < k).mean()
                                         for r in per_task.values()]))
              for k in (1, 5)}
-    out = dict(arm=f"{a.arm}{a.tag}", n=int(N),
+    out = dict(arm=f"{a.arm}{a.tag}", n=int(N), protocol="v2.3",
                pool_sizes=[len(v) * 2 for v in by_task.values()],
                hit1=round(float(hits[0]), 4), hit5=round(float(hits[1]), 4),
                mrr=round(float(mrr), 4),

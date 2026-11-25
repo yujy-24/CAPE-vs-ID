@@ -24,12 +24,12 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from common import (BS, CKPT_DIR, GROUPS, ID_ACCUM, IDX_T, LR, PAST, PER_GROUP,
-                    SEED, STEPS, TAU, WD, append_jsonl, cosine_schedule,
-                    n_params, seed_all)
-from losses import fwd_cosine_loss, id_loss, info_nce
+from common import (BS, CKPT_DIR, GROUPS, HV23, ID_ACCUM, IDX_T, LR, PAST,
+                    PER_GROUP, SEED, STEPS, TAU, WD, append_jsonl,
+                    cosine_schedule, n_params, seed_all)
+from losses import fwd_cosine_loss, id_loss
 from modules import CAPEModel, FwdModel, IDNet
-from windows import WindowDataset, id_pairs_from_window, pad_actions
+from windows import WindowDataset, id_pairs_from_window, pad_actions, pad_branches
 
 
 def group_batches(ds, rng, groups=GROUPS, per_group=PER_GROUP):
@@ -59,79 +59,98 @@ def collate_id(ds, idxs, rng, shuffle_map=None):
     return (torch.cat(prev), torch.cat(nxt), torch.cat(act))
 
 
-def cape_loss(model, ds, groups, dev, tau):
-    """one grouped batch -> (loss, diagnostics). groups = per-episode lists."""
+def cape_loss(model, ds, groups, dev, tau, rng):
+    """v2.3 (design doc §14): line-by-line port of the OFFICIAL
+    compute_contrastive_loss (single-GPU global mode, use_group_local_state_nce
+    =False, use_action_swap=True) on our grouped batches.
+
+    Pairing (official dataset.py:404-422): each window draws ONE pair --
+    query = branch k ~ U{1..HV23} (first offset is always non-anchor);
+    key = the anchor ITSELF (zero-horizon sample) with p=0.5, else a
+    different non-anchor offset. Both branches converge on the same o_T.
+
+    Negatives (official loss.py:220-236): ALL keys in the batch (same-episode
+    group members = hard negatives, cross-episode keys = "random states from
+    other trajectories") + derangement-swapped query-action outcomes as extra
+    negative columns in BOTH directions. Single positive per row (eq 3), no
+    multi-positive logsumexp."""
     idxs = np.array([i for g in groups for i in g])
     B = len(idxs)
-    local = []                                   # local positions per group
-    b = 0
-    for g in groups:
-        local.append(list(range(b, b + len(g)))); b += len(g)
-    ctx1 = torch.from_numpy(ds.ctx_patch[idxs, 0].astype(np.float32)).to(dev)
-    ctx2 = torch.from_numpy(ds.ctx_patch[idxs, 1].astype(np.float32)).to(dev)
-    acts1 = pad_actions([ds.branch(int(i), 1)[1] for i in idxs])
-    acts2 = pad_actions([ds.branch(int(i), 2)[1] for i in idxs])
-    u1 = model(ctx1, acts1.to(dev))
-    u2 = model(ctx2, acts2.to(dev))
-    # state keys for every window (empty-action encoding, shared space)
-    keys = model.encode_state(torch.cat([ctx1, ctx2], 0))       # [2B,256]
-    k1, k2 = keys[:B], keys[B:]
-    # v2.2: goal state = zero-horizon SAMPLE (paper App.A) -> a third branch
-    # converging to the same o_T. Eq (3) is PAIRED: each branch pair gets its
-    # own symmetric InfoNCE with its own numerator. (v2.1's shared-logsumexp
-    # multi-positive saturates -- the u1<->u2 term (cos .87 @ tau .07 = e^12)
-    # dominates the numerator, the goal positive gets ~1e-6 of the softmax
-    # weight: goal_cos stayed -0.06 for 20k steps and retrieval stayed chance.)
-    s_T = model.encode_state(
-        torch.from_numpy(ds.goal_patch[idxs].astype(np.float32)).to(dev))
-    allkeys = torch.cat([keys, s_T], 0)                          # 3B state-side keys
-    negs, swap = [], []
-    for lg in local:
-        for pos, j in enumerate(lg):
-            others = [x for x in lg if x != j]
-            negs.append(torch.cat([k1[others], k2[others], s_T[others]]))
-            swap.append(lg[(pos + 1) % len(lg)])                 # in-group roll
-    u_sw = model(ctx1, acts2[swap].to(dev))                      # swapped-action outcome
-    K = max(x.shape[0] for x in negs)                            # full groups: 3(S-1)
-    negs = torch.stack([
-        x if x.shape[0] == K else
-        torch.cat([x, allkeys[torch.randperm(3 * B, device=dev)[:K - x.shape[0]]]])
-        for x in negs], 0)                                       # [B,K,256]
-    idx_c = torch.stack([torch.randperm(3 * B, device=dev)[:2] for _ in range(B)])
-    cross = allkeys[idx_c]                                       # [B,2,256] random
-    negs = torch.cat([negs, u_sw.unsqueeze(1), cross], 1)        # [B,K,256]
-    negs = F.normalize(negs, dim=-1)
-    l12 = info_nce(u1, u2, negs, tau)                            # branch pair, eq (3)
-    l1g = info_nce(u1, s_T, negs, tau)                           # zero-horizon pairs
-    l2g = info_nce(u2, s_T, negs, tau)
-    loss = (l12 + l1g + l2g) / 3.0
+    kq = rng.integers(1, HV23 + 1, size=B)                 # query branch 1..5
+    use_anchor = rng.random(B) < 0.5                       # key = anchor (50%)
+    j = rng.integers(1, HV23, size=B)                      # 1..4 -> k' != k
+    kk = np.where(use_anchor, 0, 1 + (kq - 1 + j) % HV23)
+
+    qb = [ds.branch_v23(int(i), int(k)) for i, k in zip(idxs, kq)]
+    kb = [ds.branch_v23(int(i), int(k)) for i, k in zip(idxs, kk)]
+    ctx_q = torch.from_numpy(np.stack([b[0] for b in qb])).to(dev)
+    acts_q, len_q = pad_branches([b[1] for b in qb])
+    u_q = model(ctx_q, acts_q.to(dev), len_q.to(dev))
+
+    # key side: k=0 rows are zero-horizon samples -> encode_state (single
+    # empty-action query through the same decoder == official's all-padded
+    # noop branch); k>=1 rows are regular branch predictions.
+    K = torch.empty(B, u_q.shape[-1], device=dev)
+    ai, bi = np.flatnonzero(kk == 0), np.flatnonzero(kk > 0)
+    if len(ai):
+        K[ai] = model.encode_state(
+            torch.from_numpy(np.stack([kb[t][0] for t in ai])).to(dev))
+    if len(bi):
+        ctx_b = torch.from_numpy(np.stack([kb[t][0] for t in bi])).to(dev)
+        acts_b, len_b = pad_branches([kb[t][1] for t in bi])
+        K[bi] = model(ctx_b, acts_b.to(dev), len_b.to(dev))
+
+    # swapped-action outcomes: derangement over the whole query batch, each
+    # row keeps its OWN context but executes another query's action sequence.
+    ar = np.arange(B)
+    while True:
+        perm = rng.permutation(B)
+        if not (perm == ar).any():
+            break
+    u_sw = model(ctx_q, acts_q[perm].to(dev), len_q[perm].to(dev))
+
+    logits_q = u_q @ K.T / tau                        # diag = positives
+    logits_q_sw = u_q @ u_sw.T / tau                  # swap negatives (extra cols)
+    logits_k = K @ u_q.T / tau
+    logits_k_sw = K @ u_sw.T / tau
+    labels = torch.arange(B, device=dev)
+    loss = 0.5 * (F.cross_entropy(torch.cat([logits_q, logits_q_sw], 1), labels)
+                  + F.cross_entropy(torch.cat([logits_k, logits_k_sw], 1), labels))
+
     with torch.no_grad():
-        diag = dict(swapwins=float((F.cosine_similarity(
-            u1, u_sw, -1) > F.cosine_similarity(u1, u2, -1)).float().mean()),
-                    goal_cos=float(F.cosine_similarity(u1, s_T, -1).mean()),
-                    nce_goal=float((l1g + l2g) / 2))
+        s_T = model.encode_state(
+            torch.from_numpy(ds.branch_patch[idxs, HV23].astype(np.float32)).to(dev))
+        diag = dict(swapwins=float((F.cosine_similarity(u_q, u_sw, -1)
+                                    > F.cosine_similarity(u_q, K, -1)).float().mean()),
+                    goal_cos=float(F.cosine_similarity(u_q, s_T, -1).mean()),
+                    state_frac=float(use_anchor.mean()))
     return loss, diag
 
 
 @torch.no_grad()
 def cape_counterfactual(model, ds, dev, n=64):
     """collapse meter: how much do u's move when ACTIONS change (ctx fixed)?
-    degenerate signature: both cosines -> 1 (v1's failure mode)."""
+    degenerate signature: both cosines -> 1 (v1's failure mode). v2.3: draws
+    k ~ U{1..HV23} branches; foreign actions come from another SAME-TASK
+    window at the SAME k (matched length)."""
     rng = np.random.default_rng(0)
     idxs = np.arange(min(n, len(ds)))
-    ctx = torch.from_numpy(ds.ctx_patch[idxs, 1].astype(np.float32)).to(dev)
-    acts_t = pad_actions([ds.branch(int(i), 2)[1] for i in idxs])
+    ks = rng.integers(1, HV23 + 1, size=len(idxs))
+    tb = [ds.branch_v23(int(i), int(k)) for i, k in zip(idxs, ks)]
+    ctx = torch.from_numpy(np.stack([b[0] for b in tb])).to(dev)
+    acts_t, len_t = pad_branches([b[1] for b in tb])
     acts_r = torch.randn_like(acts_t) * 0.3
-    f_idx = []                        # foreign actions: another SAME-TASK window
+    f_idx = np.empty(len(idxs), dtype=int)   # foreign: same-task other window
     tasks = ds.meta["task"]
-    for i in idxs:
+    for t, i in enumerate(idxs):
         same = np.flatnonzero(tasks == tasks[i])
         same = same[same != i]
-        f_idx.append(int(same[rng.integers(len(same))]) if len(same) else int(i))
-    acts_f = pad_actions([ds.branch(int(j), 2)[1] for j in f_idx])
-    u_t = model(ctx, acts_t.to(dev))
-    u_f = model(ctx, acts_f.to(dev))
-    u_r = model(ctx, acts_r.to(dev))
+        f_idx[t] = int(same[rng.integers(len(same))]) if len(same) else int(i)
+    fb = [ds.branch_v23(int(j), int(k)) for j, k in zip(f_idx, ks)]
+    acts_f, len_f = pad_branches([b[1] for b in fb])
+    u_t = model(ctx, acts_t.to(dev), len_t.to(dev))
+    u_f = model(ctx, acts_f.to(dev), len_f.to(dev))
+    u_r = model(ctx, acts_r.to(dev), len_t.to(dev))
     return dict(cos_foreign=F.cosine_similarity(u_t, u_f, -1).mean().item(),
                 cos_random=F.cosine_similarity(u_t, u_r, -1).mean().item())
 
@@ -159,7 +178,7 @@ def validate(model, ds, arm, dev, form, bs, tau=TAU):
     else:
         gen = group_batches(ds, rng, groups=4)
         for _ in range(16):
-            loss, _ = cape_loss(model, ds, next(gen), dev, tau)
+            loss, _ = cape_loss(model, ds, next(gen), dev, tau, rng)
             tot += loss.item(); n += 1
     model.train()
     return tot / max(1, n)
@@ -215,8 +234,10 @@ def main():
         while step < a.steps:
             groups = next(batches)
             for gp in opt.param_groups:
-                gp["lr"] = a.lr * cosine_schedule(step, a.steps)
-            loss, diag = cape_loss(model, tr, groups, dev, a.tau)
+                # v2.3: official warmup = 5% of total steps (train.py:236)
+                gp["lr"] = a.lr * cosine_schedule(
+                    step, a.steps, warmup=max(1, a.steps // 20))
+            loss, diag = cape_loss(model, tr, groups, dev, a.tau, rng)
             opt.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -231,7 +252,7 @@ def main():
                                        goal_cos=diag["goal_cos"], **cf))
                 print(f"[{name}] step {step} loss {loss.item():.4f} val {vl:.4f} "
                       f"cf {cf['cos_foreign']:.3f}/{cf['cos_random']:.3f} "
-                      f"goal {diag['goal_cos']:.3f} nceg {diag['nce_goal']:.3f} "
+                      f"goal {diag['goal_cos']:.3f} state {diag['state_frac']:.2f} "
                       f"swapwins {diag['swapwins']:.3f}",
                       flush=True)
             step += 1

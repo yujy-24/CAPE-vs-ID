@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Full pipeline (v2 protocol, design doc §11). Run inside WSL:
+# Full pipeline (v2.3 protocol, design doc §11 + §14 official-code port). Run inside WSL:
 #   bash run_all.sh [stage]
 # Stages: env, manifest, cache, smoke, train, eval, controls   (default: smoke)
 set -e
@@ -23,7 +23,7 @@ fi
 
 case "$STAGE" in
   cache)
-    echo "=== stage 4: feature cache v2 (long: ~1-2 h; ~17 GB) ==="
+    echo "=== stage 4: feature cache v3 (adds branch_patch 6 slots; long: ~1-2 h) ==="
     "$PY" build_cache.py
     echo ">>> alignment already verified on v1 videos (5/5, log entry 三);"
     echo ">>> if dataset unchanged, skip the human jpg check."
@@ -46,15 +46,15 @@ case "$STAGE" in
     echo "=== stage 6: metric battery (seed 42 arms) ==="
     "$PY" probe_r2.py --space frozen --y-shuffle                   # floor control
     "$PY" probe_r2.py --space frozen
-    "$PY" probe_r2.py --space id_direct --ckpt cache_v2/ckpt/id/final.pt
-    "$PY" probe_r2.py --space cape --ckpt cache_v2/ckpt/cape/final.pt
-    "$PY" probe_r2.py --space fwd  --ckpt cache_v2/ckpt/fwd/final.pt
+    "$PY" probe_r2.py --space id_direct --ckpt cache_v3/ckpt/id/final.pt
+    "$PY" probe_r2.py --space cape --ckpt cache_v3/ckpt/cape/final.pt
+    "$PY" probe_r2.py --space fwd  --ckpt cache_v3/ckpt/fwd/final.pt
     "$PY" eval_retrieval.py --arm frozen
     "$PY" eval_retrieval.py --arm id
     "$PY" eval_retrieval.py --arm cape
     "$PY" eval_retrieval.py --arm fwd
     "$PY" diag_pairwise_cos.py
-    "$PY" diag_pairwise_cos.py --ckpt cache_v2/ckpt/cape/final.pt
+    "$PY" diag_pairwise_cos.py --ckpt cache_v3/ckpt/cape/final.pt
     ;;
   *)
     echo "unknown stage '$STAGE' (use env|manifest|cache|smoke|train|controls|eval)"

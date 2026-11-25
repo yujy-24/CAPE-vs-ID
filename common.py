@@ -16,7 +16,7 @@ BB_DIR = "/home/yjy/LaWAM/weights/dinov3-vitb16-pretrain-lvd1689m"
 DIM = 768          # DINOv3 ViT-B/16 hidden size (patch tokens + CLS)
 IMG = 224          # input resolution -> (224/16)^2 = 196 patch tokens
 PROJ = os.path.dirname(os.path.abspath(__file__))
-PROTOCOL = "v2"
+PROTOCOL = "v3"
 CACHE = os.environ.get("IDVC_CACHE", os.path.join(PROJ, f"cache_{PROTOCOL}"))
 MANIFEST = os.path.join(CACHE, "manifest.parquet")
 CKPT_DIR = os.path.join(CACHE, "ckpt")
@@ -44,6 +44,15 @@ POOL_LEN = PAST + 1 + FUTS + 1   # 29 pooled slots (+1 random negative)
 #   PAST+1..PAST+FUTS -> T+1..T+3, PAST+FUTS+1 -> random negative frame.
 # NOTE v2: window starts at T-PAST (probe pairs still use its last H+1 frames).
 IDX_T = PAST                     # slot of frame T
+
+# v2.3 branch offsets (design doc §14, official-code aligned):
+#   anchor = T; branch starts = T - k*STRIDE_V23, k in 1..HV23 (official
+#   dataset.py candidate_offsets, stride 4 @15fps -> 4 @20fps here).
+#   branch_patch slots [N, HV23+1, 196, 768] = frames [T-20,...,T-4, T]
+#   (slot HV23 = anchor: zero-horizon context AND retrieval-key context).
+#   key branch: 50% anchor itself, else k' != k (official lines 404-422).
+STRIDE_V23 = 4
+HV23 = 5
 
 # ---- matched training config (design doc §4) ----
 STEPS = 20000

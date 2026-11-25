@@ -249,3 +249,19 @@
 5. **消融表交叉佐证**：Action-Visual Alignment（"directly aligning the predictive future state with future observation"，即纯 (u,enc(o_T)) 对齐）检索 Hit@5 达全模型 84~91%（80.19 vs 84.19 @h=5 等）——**(u, enc(o_T)) 对齐通道就是论文检索性能的来源**；全模型=分支对+零视野对的完整目标函数。v2.0/v2.1 恰好完全没有该通道（cos −0.04）⇒ 随机检索与论文机制自洽。v2.2 逐对式将其接回=全模型读法。
 
 **结论：v2.2 机制与原文锁定一致，可执行；唯一残留歧义（零视野配对比率未指定）已登记。重训仍待用户指令。**
+
+## 十二、2026-11-25 官方开源代码对齐调查 + v2.3 移植落地
+
+**开源代码调查（用户指令"查开源代码，直接套用或参考复刻"）**：
+- **CAPE 官方仓库已放出**：`github.com/chen2151643/CAPE`（论文页/arXiv/HF papers 均无索引，GitHub API 搜索命中——"每次调查开源代码就报错"的 ToolSearch 1210 毒已绕过，全程 webReader+curl）。已 clone 至 `E:\world_model\external_repos\CAPE`。数据管线绑死 DROID（双外参相机/rot6d/euler/lerobot 包），**不能直接套用，机制层逐行参考**。
+- **42 号仓库确认公开**：`k1seul/corl2026-action-relevant-latents`（MIT，CoRL 2026）。ID aux loss = `concat(f_t,f_{t+1})→MLP(512,256)→L2` on patch-mean——与我们的 id 臂机制一致（IDNet 4 层 20.1M 为四臂容量对齐设计，非机制偏离）。已 clone 留档。
+
+**官方代码 vs v2.2 四个裁决性差异**（详见设计文档 §14）：①零视野配对=数据侧随机 50%（第二支路即 anchor），非三分支全对；②分支=anchor 前 1..5 步 × stride4，非 5..12 帧连续；③负池=整批 keys+全批换动作（~1023+1024 vs 我们组内3+跨批2），差两个量级；④last-token 取 valid_len−1 非 padding 末位（v2.2 实现瑕疵，已修）。另发现官方配置与论文两处矛盾（vislayer0 / droid_12000 vs 论文 3 层 / 8000 条），取论文口径并登记。
+
+**v2.3 实现（§14 预登记后动工）**：
+- `common.py`：PROTOCOL="v3"（cache_v3）、STRIDE_V23=4/HV23=5（0.2s/步，均在 PAST=24 内 ⇒ manifest 不变、id/fwd 免重训）。
+- `build_cache.py`：patch 槽位增存 branch_patch 6 槽 [T−20..T]；ctx_patch/goal_patch 原样保留（脚本过渡兼容）；完整性闸门覆盖新槽。cache_v3 重建后台运行中（`cache_v3/build_cache.log`）。
+- `modules.py`：decoder 按 lengths 在**最后有效位** gather（官方 valid_len−1），pad 位替换为空查询 token——单元验证 b) 通过：padding 不再泄漏进终态 token（v2.2 的隐性偏差修正）；`forward_state` 不变。
+- `train.py`：cape_loss 重写为官方 `compute_contrastive_loss` 单卡全局版逐行移植——每窗一对（query=k~U{1..5}，key=50% anchor/50% 异支路）、负池=整批 keys+全批 derangement 换动作、单正对+对称 CE、warmup 5%（官方 train.py:236）。监控增 state_frac，保留 goal_cos/swapwins/反事实。
+- `eval_retrieval.py` 重写：query k~U{1..5}（seed 1234 四臂同 query）、池=每窗{分支帧,anchor}双键、排除自身分支键；frozen/fwd/id 不重训同协议重评。`diag_pairwise_cos.py` B 部分支路同步 v2.3。`test_v23_units.py` 新增（4 项全绿）。
+- 冒烟与重训：cache_v3 完成后先 30 步冒烟；160min 重训按 GPU 约定待用户指令。

@@ -13,29 +13,31 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from common import CACHE, FUTS, H, PAST
+from common import CACHE, FUTS, H, HV23, PAST, STRIDE_V23
 
 
 class WindowDataset(Dataset):
     def __init__(self, split):
         paths = sorted(glob.glob(os.path.join(CACHE, f"{split}_shard_*.npz")))
         assert paths, f"no shards for split={split} under {CACHE}; run build_cache.py first"
-        cp, pl, pm, aw, gp = [], [], [], [], []
+        cp, pl, pm, aw, gp, bp = [], [], [], [], [], []
         meta = {k: [] for k in ("ep", "T", "t1", "t2", "task", "rand_ep", "rand_fr")}
         for p in paths:
             z = np.load(p)
             cp.append(z["ctx_patch"]); pl.append(z["pooled"])
             pm.append(z["pmean"]); aw.append(z["act_win"])
-            gp.append(z["goal_patch"])
+            gp.append(z["goal_patch"]); bp.append(z["branch_patch"])
             for k in meta:
                 meta[k].append(z[k])
-        self.ctx_patch = np.concatenate(cp)   # [N,2,196,768] fp16
+        self.ctx_patch = np.concatenate(cp)   # [N,2,196,768] fp16 (t1/t2, legacy v2)
         self.goal_patch = np.concatenate(gp)  # [N,196,768] fp16 (v2.1 goal state)
+        self.branch_patch = np.concatenate(bp)  # [N,HV23+1,196,768] fp16 (v2.3)
         self.pooled = np.concatenate(pl)      # [N,29,768] fp16 (CLS)
         self.pmean = np.concatenate(pm)       # [N,29,768] fp16 (patch-mean)
         self.act_win = np.concatenate(aw)     # [N,PAST,7] f32, covers [T-PAST..T)
         self.meta = {k: np.concatenate(v) for k, v in meta.items()}
         assert self.pooled.shape[1] == PAST + FUTS + 2, self.pooled.shape
+        assert self.branch_patch.shape[1] == HV23 + 1, self.branch_patch.shape
         # episodes with >=2 windows: cape grouped batching pool
         self.ep_of = {}
         for i, e in enumerate(self.meta["ep"]):
@@ -57,6 +59,18 @@ class WindowDataset(Dataset):
         acts = self.act_win[i][t - (T - PAST):]         # [n,7], n = T - t
         return (self.ctx_patch[i, which - 1].astype(np.float32),
                 acts.astype(np.float32), T - t)
+
+    def branch_v23(self, i, k):
+        """official-offset branch (design doc §14): k=0 -> anchor zero-horizon
+        sample (anchor ctx, ZERO actions); k in 1..HV23 -> start frame
+        T - k*STRIDE_V23, remaining = k*STRIDE_V23 per-frame delta actions.
+        -> (ctx [196,768] fp32, acts [n,7] fp32, n)."""
+        if k == 0:
+            return (self.branch_patch[i, HV23].astype(np.float32),
+                    np.zeros((0, 7), np.float32), 0)
+        off = k * STRIDE_V23
+        return (self.branch_patch[i, HV23 - k].astype(np.float32),
+                self.act_win[i][PAST - off:].astype(np.float32), off)
 
     def probe_pairs(self):
         """consecutive (z_k, z_{k+1}) -> a_k inside the H-frame probe window,
@@ -87,6 +101,19 @@ def pad_actions(seq_list, max_len=None):
     for i, a in enumerate(seqs):
         out[i, : len(a)] = a[:n]
     return out
+
+
+def pad_branches(seq_list):
+    """pad_branches + lengths (v2.3): model gathers the final token at each
+    sample's LAST VALID slot (official cape_model.py valid_len-1), pads are
+    never read out. -> (acts [B,n,7] fp32, lengths [B] long)."""
+    seqs = [torch.as_tensor(a, dtype=torch.float32) for a in seq_list]
+    n = max(len(a) for a in seqs)
+    out = torch.zeros(len(seqs), n, 7)
+    lengths = torch.tensor([len(a) for a in seqs], dtype=torch.long)
+    for i, a in enumerate(seqs):
+        out[i, : len(a)] = a
+    return out, lengths
 
 
 def probe_parts(split):

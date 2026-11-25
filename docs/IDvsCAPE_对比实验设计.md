@@ -157,3 +157,25 @@
 **预登记终止判据**：20k 步后若 goal_cos<0.2 或检索仍随机 ⇒ 判"本数据规模/负池结构下 CAPE 检索优势不可复现"，停止 Cape 实现细节迭代，主线按 42 号 ID 探针对比收口（id/控制组/种子补齐照旧）。
 
 **重训前原文复核（2026-11-25）**：式 (3) 成对+对称逐字确认（全文无多正对 logsumexp，v2.1 共享分子系误读）；附录 A 零视野样本=独立训练样本（空动作查询、同通路）逐字确认；Table 5 无零视野比率、偏移无范围 ⇒ 配对比率为原文未定细节，本实现取确定性三分支（两读法公共核心=独立样本·成对·满梯度，登记为残留歧义）；负集三分结构与 C.1 检索协议逐字吻合；消融表佐证 (u,enc(o_T)) 对齐通道=检索性能来源（纯对齐即达全模型 84~91%）。机制无误，可执行。
+
+## 14. v2.3 修正案：对齐官方开源代码（2026-11-25，于任何 v2.3 数字之前预登记）
+
+**动因**：用户指令"查开源代码，直接套用或参考复刻，尽可能完全复刻论文"。CAPE 官方仓库已放出（`github.com/chen2151643/CAPE`，论文正文无链接、附录仅言 "released upon publication"，arXiv 页与 HF papers 页均无索引）。逐行核对官方 `src/utils/loss.py`、`src/dataset/dataset.py`（`__getitem__` 配对段 384–422 行）、`src/models/cape_model.py`、`train.py`、`conf/`，**官方代码裁决了 §13 登记的全部残留歧义，且与 v2.2 的取法不同**：
+
+1. **零视野配对比率（§13 歧义，官方裁决）**：数据侧随机——每训练样本 = 恰好一对支路汇于同一 anchor；第二支路 **50% 概率取 anchor 自身**（零动作、noop token、同解码通路），否则取异于第一支路的非 anchor 偏移。即 (branch, s_T) 对≈50%、(branch, branch) 对≈50%，**每样本只训一对**（逐 epoch 重采样）。v2.2 的确定性三分支全对（state 对占 2/3、每窗 3 对）废止。
+2. **分支长度**：官方 branch 起点 = anchor − i·stride，i∈{1..H}，H=5、stride=4@DROID 15fps（每步 0.267s，剩余动作 1..5 步）。v2.2 为 5..12 帧连续。v2.3 取 stride=4@20fps（每步 0.2s）× i∈{1..5} ⇒ 剩余 4..20 帧连续动作，均在 PAST=24 窗口内 ⇒ **manifest 不变、id/fwd 无需重训**。
+3. **负例池**：官方主配置（`conf/experiment/dinov2-S.yaml`，use_group_local_state_nce=false）= **整批 keys 互为负例**（批 1024 ⇒ 每锚 ~1023 负键，含同集组 15 硬负例）+ **全批换动作 query**（derangement，仅 query 支路换动作、作为两个方向的附加负列）。v2.2 为组内 3 键+跨批 2 键（小约两个量级）。v2.3 负池 = 整批 keys + 全批换动作（批 32 ⇒ 每锚 31+31 负键；规模差=8GB 显存约束，如实登记）。
+4. **last-token 取位**：官方在 `valid_len−1`（最后**有效**动作位）取终态，padding 位替换为 noop 且被 attention mask；v2.2 取 padding 后序列末位（分布外位置）。v2.3 改为按长度 gather；k=0（零视野）走 encode_state 单空查询通路（与官方零 padding 分支逐位等价：位置 0=noop、因果掩码只见自身、无位置编码混入）。
+5. **优化器**：官方 AdamW 1e-4/1e-4、warmup=5% 总步数、cosine→1e-6、无梯度裁剪；v2.3 warmup 2000→1000，梯度裁剪 1.0 保留（本机稳定件）。80 epochs 对齐成立：20k 步 × 32 对 ÷ 7993 窗 ≈ 80 epochs。
+
+**v2.3 实现**（新建 cache_v3，manifest 与 pooled/pmean/act_win/probe 分片内容不变，id/fwd/探针零改动）：
+- `build_cache.py`：patch 槽位增存 branch_patch = 帧 [T−20, T−16, T−12, T−8, T−4, T]（6 槽，slot 5=anchor，兼作零视野上下文与检索键上下文）；ctx_patch/goal_patch 原样保留（评测脚本过渡期兼容）。
+- `train.py` cape：每窗随机 i∈{1..5} 为 query 支路（首支路必非 anchor，同官方）；key 支路 50% anchor/50% 异支路；损失 = 官方 `compute_contrastive_loss` 单卡全局版逐行移植（单正对 + 对称 + swap 负列）。
+- `eval_retrieval.py` v2.3 协议：query k~U{1..5}（seed 1234，四臂同 query 集）；池 = 每窗双键 {分支帧 T−4k, anchor T}（≈250/任务，与 v2 池规模持平）；排除自身分支键、真值 = 自身 anchor 键；frozen/fwd/id 不重训、同协议重评（主表 v2.3 行 = 四臂全新口径，v2.0 表保留并报）。`diag_pairwise_cos.py` B 部分支路同步为 k~U{1..5}、o_T 直接取 branch_patch 锚槽。
+- 监控保留 goal_cos/swapwins/反事实敏感度/val InfoNCE（与 v2.0–v2.2 历史可比），增记 state 对占比。
+
+**论文-代码不一致点（如实登记，取论文口径）**：官方 dinov2-S 实验配置 num_visual_layers=0（视觉上下文编码器=Identity，实验名 vislayer0）与论文正文"3 层自注意力"矛盾，且与论文消融"去掉它掉分最多"矛盾；data 配置 droid_12000 vs 论文正文 8000 条。本实现 ctx/dec 层数与 FF 宽度沿用 v2 容量对齐设计（ctx2+dec2@768≈25.2M vs 官方 ViT-S 21.3M；骨干 DINOv3-B vs 官方 DINOv2-S），非机制偏离。
+
+**预登记判据（继承 §13，不重置）**：20k 步后 goal_cos<0.2 或检索仍随机 ⇒ 判"本数据规模/负池结构下 CAPE 检索优势不可复现"，停止 Cape 实现细节迭代，主线按 42 号 ID 探针对比收口。v2.2 代码留档作对照（不再重训）。
+
+**残留偏离清单（v2.3 后局限节报告）**：① 负池 31+31 vs 官方 ~1023+1024（批上限）；② stride 0.2s vs 0.267s（帧率折算取整，保 H=5 且不越 PAST=24）；③ 动作=逐帧 7 维 delta（与 id 臂/探针同语义；官方为 stride 级相对位姿，DROID 有绝对状态可构建，改动作语义会破坏四臂对齐）；④ T±1..3 邻近负例仍以同集他窗键近似（继承 §12）；⑤ 单相机（官方训练随机取 DROID 双外参之一，我们天然单视角等价）。
