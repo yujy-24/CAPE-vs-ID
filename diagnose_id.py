@@ -37,6 +37,8 @@ def scores(y: np.ndarray, pred: np.ndarray) -> dict:
         "mae_dims": np.abs(error).mean(axis=0).tolist(),
         "action_mean": y.mean(axis=0).tolist(),
         "action_std": y.std(axis=0).tolist(),
+        "prediction_mean": pred.mean(axis=0).tolist(),
+        "prediction_std": pred.std(axis=0).tolist(),
     }
 
 
@@ -170,6 +172,38 @@ def task_metrics(data: dict, pred: np.ndarray) -> dict:
             for mask in [data["task"] == task]}
 
 
+def grouped_metrics(y: np.ndarray, pred: np.ndarray) -> dict:
+    out = {}
+    for name, dims in (("translation", slice(0, 3)),
+                       ("rotation", slice(3, 6)), ("gripper", slice(6, 7))):
+        target = np.asarray(y[:, dims], np.float64)
+        prediction = np.asarray(pred[:, dims], np.float64)
+        sst = np.square(target - target.mean(axis=0)).sum()
+        sse = np.square(prediction - target).sum()
+        out[name] = {"r2": float(1 - sse / sst) if sst > 1e-12 else None,
+                     "mae": float(np.abs(prediction - target).mean()),
+                     "n": len(y)}
+    return out
+
+
+def quantile_groups(data: dict, pred: np.ndarray, reference: np.ndarray,
+                    value: np.ndarray, label: str) -> dict:
+    lo, hi = np.quantile(reference, [0.25, 0.75])
+    masks = {"low": value <= lo, "middle": (value > lo) & (value < hi),
+             "high": value >= hi}
+    return {"label": label, "reference_q25": float(lo), "reference_q75": float(hi),
+            "bins": {name: scores(data["y"][mask], pred[mask])
+                     for name, mask in masks.items() if mask.any()}}
+
+
+def unique_pairs(data: dict, pred: np.ndarray) -> tuple[dict, np.ndarray]:
+    pairs = np.stack([data["episode"], data["frame"]], axis=1)
+    _, first_indices = np.unique(pairs, axis=0, return_index=True)
+    ix = np.sort(first_indices)
+    return {k: v[ix] for k, v in data.items()
+            if k not in {"actions_window", "windows"}}, pred[ix]
+
+
 def lag_metrics(data: dict, pred: np.ndarray, actions_by_episode: dict,
                 central_only: bool = False) -> dict:
     # Hold the exact same predictions and frames fixed for every lag.
@@ -213,6 +247,11 @@ def main() -> None:
     train_mean = np.concatenate(train_actions).mean(axis=0)
     source = {"same_task_unseen_episodes": same, "heldout_tasks": val}
     predictions = {"same_task_unseen_episodes": same_pred, "heldout_tasks": val_pred}
+    val_unique, val_unique_pred = unique_pairs(val, val_pred)
+    source["heldout_tasks_unique_pairs"] = val_unique
+    predictions["heldout_tasks_unique_pairs"] = val_unique_pred
+    action_norm_reference = np.linalg.norm(same["y"][:, :6], axis=1)
+    change_reference = np.linalg.norm(same["z1"] - same["z0"], axis=1)
     report = {"checkpoint": str(args.ckpt), "checkpoint_config": ckpt.get("config"),
               "coverage": coverage, "train_action_mean": train_mean.tolist(), "sets": {}}
     for name, data in source.items():
@@ -220,10 +259,19 @@ def main() -> None:
         entry = {"id": scores(data["y"], pred),
                  "train_mean_baseline": scores(data["y"], np.broadcast_to(train_mean, data["y"].shape)),
                  "previous_action_baseline": scores(data["y"], data["previous"]),
-                 "by_task": task_metrics(data, pred)}
+                 "by_task": task_metrics(data, pred),
+                 "action_groups": grouped_metrics(data["y"], pred),
+                 "action_magnitude": quantile_groups(
+                     data, pred, action_norm_reference,
+                     np.linalg.norm(data["y"][:, :6], axis=1),
+                     "norm of first six action coordinates"),
+                 "feature_change": quantile_groups(
+                     data, pred, change_reference,
+                     np.linalg.norm(data["z1"] - data["z0"], axis=1),
+                     "norm of DINO feature change; proxy, not physical motion")}
         if name == "same_task_unseen_episodes":
             entry["lag_diagnostic"] = lag_metrics(data, pred, same["actions_by_episode"])
-        else:
+        elif name == "heldout_tasks":
             # Val windows contain the full 24-step action history, enabling
             # central-frame lags without accessing raw video or future labels.
             window = data["actions_window"]
