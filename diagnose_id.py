@@ -79,6 +79,16 @@ def read_val(cache: Path) -> dict:
     }
 
 
+def training_window_action_mean(cache: Path) -> np.ndarray:
+    parts = []
+    for path in sorted(cache.glob("train_shard_*.npz")):
+        with np.load(path) as item:
+            parts.append(item["act_win"][:, PAST-H:PAST].reshape(-1, 7))
+    if not parts:
+        raise FileNotFoundError(f"no train shards in {cache}")
+    return np.concatenate(parts).mean(axis=0)
+
+
 def read_source_tables(data_root: Path) -> tuple[pd.DataFrame, dict[int, np.ndarray], dict[int, int]]:
     episodes = pd.concat([pd.read_parquet(p) for p in sorted(glob.glob(
         str(data_root / "meta/episodes/chunk-*/*.parquet")))], ignore_index=True)
@@ -241,10 +251,7 @@ def main() -> None:
     same, coverage = unseen_same_task(args.cache, args.data_root)
     same_pred = predict(model, same["z0"], same["z1"], device)
 
-    manifest = pd.read_parquet(args.cache / "manifest.parquet")
-    used_eps = set(manifest.loc[manifest.split == "train", "episode"].astype(int))
-    train_actions = [a for ep, a in same["actions_by_episode"].items() if ep in used_eps]
-    train_mean = np.concatenate(train_actions).mean(axis=0)
+    train_mean = training_window_action_mean(args.cache)
     source = {"same_task_unseen_episodes": same, "heldout_tasks": val}
     predictions = {"same_task_unseen_episodes": same_pred, "heldout_tasks": val_pred}
     val_unique, val_unique_pred = unique_pairs(val, val_pred)
