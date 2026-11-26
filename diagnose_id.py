@@ -256,7 +256,11 @@ def main() -> None:
               "coverage": coverage, "train_action_mean": train_mean.tolist(), "sets": {}}
     for name, data in source.items():
         pred = predictions[name]
+        static_pred = predict(model, data["z0"], data["z0"], device)
+        reverse_pred = predict(model, data["z1"], data["z0"], device)
         entry = {"id": scores(data["y"], pred),
+                 "static_pair_diagnostic": scores(data["y"], static_pred),
+                 "reverse_pair_diagnostic": scores(data["y"], reverse_pred),
                  "train_mean_baseline": scores(data["y"], np.broadcast_to(train_mean, data["y"].shape)),
                  "previous_action_baseline": scores(data["y"], data["previous"]),
                  "by_task": task_metrics(data, pred),
