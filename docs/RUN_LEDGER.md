@@ -29,5 +29,6 @@
 | 2026-11-26 00:27:22 | `cape_noswap_20261126_local` | `started` | `train.py --arm cape --no-swap --tag _noswap`（源码 HEAD 见下一提交），本机 RTX 4070，日志 `cache_v3/ckpt/cape_noswap_train.log`（不入 git） |
 
 | 2026-11-26 16:49:45 | `id_clean_diagnostic_20261126_remote` | `started` | 远端 RTX 4090，用 `diagnose_id.py` 对 ID seed 43 检查点做只读诊断；同任务未见 episode 与留出任务，日志位于 `cache_v3/diagnostics/id_clean_20261126/`；结果和退出状态待回填 |
+| 2026-11-26 17:03:47 | `id_clean_diagnostic_20261126_remote` | `completed` | `diagnostic_exit=0`；[最终原始报告](../results/id_clean_diagnostic_20261126/report.json)、[执行日志](../results/id_clean_diagnostic_20261126/run.log)、[校验和](../results/id_clean_diagnostic_20261126/checksums.sha256)；同任务新 episode R² 0.7447（26 集、9 个任务），留出任务 R² −0.0405，方法限制见实验记录·十八 |
 
 下一次启动训练时，先在此表追加并提交 `started` 行；跑完或中断后再提交最终事件及原始产物。运行详情与已知限制见 [ID seed 43 记录](../results/id_seed43_20261125/README.md)。
