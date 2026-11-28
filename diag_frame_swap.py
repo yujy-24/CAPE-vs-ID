@@ -51,7 +51,10 @@ def heldout_feature_set(cache: Path, data_root: Path, device: str) -> dict:
     ep_df, acts = episode_tables()
     by_task = defaultdict(list)
     for _, row in ep_df.iterrows():
-        task = ix_by_name.get(str(row.tasks))
+        # tasks column holds a list of names in LeRobot 3.0 episodes tables
+        raw = row.tasks
+        name = raw[0] if isinstance(raw, (list, np.ndarray)) else raw
+        task = ix_by_name.get(str(name))
         if task in held_tasks:
             by_task[task].append(int(row.episode_index))
 
@@ -168,23 +171,30 @@ def condition_report(z0: np.ndarray, zs: np.ndarray, pred: np.ndarray, ref: np.n
     return out
 
 
+def agg_vals(vals: list):
+    if isinstance(vals[0], dict):
+        return {k: agg_vals([v[k] for v in vals]) for k in vals[0]}
+    nums = [v for v in vals if v is not None]
+    return round(float(np.mean(nums)), 4) if nums else None
+
+
 def evaluate_set(model: IDNet, feats: dict, acts: dict, task_of: dict,
                  device: str, rng: np.random.Generator) -> dict:
     eps_by_task = defaultdict(list)
     for ep, task in task_of.items():
         eps_by_task[task].append(ep)
     per_cond = defaultdict(lambda: defaultdict(list))
-    n_anchors = 0
+    n_anchors, n_eps = 0, 0
     for ep in sorted(feats):
         conds = episode_conditions(ep, feats, acts, rng, eps_by_task, sorted(feats), task_of)
         anchors = conds["anchors"]
         if not len(anchors):
             continue
         n_anchors += len(anchors)
+        n_eps += 1
         a = acts[ep]
         y_t = a[anchors]
         ref = predict(model, conds["z0"], conds["gap1"], device)
-        per_cond["n_eps"] += 1
         for name in ("static", *(f"gap{j}" for j in GAPS), "same_ep_rand",
                      "cross_ep_same_task", "cross_ep_diff_task"):
             if name not in conds:
@@ -214,18 +224,9 @@ def evaluate_set(model: IDNet, feats: dict, acts: dict, task_of: dict,
             rep["n"] = len(anchors)
             for key, val in rep.items():
                 per_cond[name][key].append(val)
-    out = {"n_anchors": n_anchors}
+    out = {"n_anchors": n_anchors, "n_episodes": n_eps}
     for name, cols in per_cond.items():
-        if name == "n_eps":
-            out["n_episodes"] = cols
-            continue
-        agg = {}
-        for key, vals in cols.items():
-            agg[key] = round(float(np.mean(vals)), 4) if isinstance(vals[0], (int, float)) else vals
-        if "grip" in agg:  # nested dicts averaged manually
-            agg["grip"] = {src: {k: round(float(np.mean([g[src][k] for g in cols["grip"]])), 4)
-                                 for k in ("r2", "mae")} for src in ("a_t", "arrival")}
-        out[name] = agg
+        out[name] = {key: agg_vals(vals) for key, vals in cols.items()}
     return out
 
 
