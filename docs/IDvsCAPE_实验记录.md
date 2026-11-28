@@ -514,4 +514,6 @@ ID 对照：seed43 −0.040（跨机跨种子一致）、shuf −0.118（H3-id �
 
 训完直接跑 `eval_retrieval.py --arm cape --tag …`（v2.3 主协议，995 查询共用种子 1234），结果落 `cache_v3/results/retrieval.jsonl`。
 
-**判读标准（先写定）**：若 seed43 下 noswap − cape 的 Hit@1 差仍为正（无论幅度），结论 2 方向成立；若翻负，结论 2 降级为"种子敏感的未定项"，RESULTS_v2.3.md 结论 2 与摘要须改写。约 2×(90–135) 分钟，运行中；完成后补记两行数字与判决。
+**判读标准（先写定）**：若 seed43 下 noswap − cape 的 Hit@1 差仍为正（无论幅度），结论 2 方向成立；若翻负，结论 2 降级为"种子敏感的未定项"，RESULTS_v2.3.md 结论 2 与摘要须改写。约 2×(90–135) 分钟。
+
+**状态：暂停（11-28 深夜）**——cape_s43 起步数分钟后被宿主内存不足时 Claude Code 的后台任务回收机制中止（训练本身无错；前两次启动失败原因：①`$PY` 变量经 Git Bash→wsl.exe 双层转译变空（train.py: command not found），②裸 `/mnt/e/...` 参数被 MSYS 改写为 Windows 路径。现修复版脚本 `run_p3_s43.sh` 已就位，日志落 E: 盘 `results_p3_s43_harness.log`，一条命令可重启：`wsl.exe -d Ubuntu-24.04 bash -c "bash /mnt/e/world_model/id_vs_cape/run_p3_s43.sh > /mnt/e/world_model/id_vs_cape/results_p3_s43_harness.log 2>&1"`。完成后仍按预登记标准补记判决。
